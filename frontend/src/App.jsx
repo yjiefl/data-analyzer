@@ -26,7 +26,9 @@ function App() {
 	const [showIntegral, setShowIntegral] = useState(false);
 	const [hoveredMetric, setHoveredMetric] = useState(null);
 	const [backendStatus, setBackendStatus] = useState('offline'); // online | offline | checking
-	const [selectedDimensions, setSelectedDimensions] = useState({}); // { 城市: '北京', 天气: '晴' }
+
+	const [activeDimension, setActiveDimension] = useState(''); // 当前选中的分组维度字段，如 '城市'
+	const [selectedDimensionValues, setSelectedDimensionValues] = useState([]); // 选中的维度值列表，如 ['北京', '上海']
 
 	// 1. 生命周期管理：初始化与销毁
 	useEffect(() => {
@@ -94,13 +96,12 @@ function App() {
 			}
 		}
 
-		// 过滤出符合日期和所有选中维度的系列
+		// 过滤出符合日期和维度筛选的系列
 		const activeSeries = series.filter(s => {
 			if (s.date !== selectedDate) return false;
-			return Object.entries(selectedDimensions).every(([dim, val]) => {
-				if (!val) return true;
-				return s.dimensions[dim] === val;
-			});
+			// 如果没有选中维度或维度值，则显示全部
+			if (!activeDimension || selectedDimensionValues.length === 0) return true;
+			return selectedDimensionValues.includes(s.dimensions[activeDimension]);
 		});
 
 		if (activeSeries.length === 0 || !selectedDate) {
@@ -206,7 +207,7 @@ function App() {
 
 		chartInstance.current.setOption(option, true);
 		setTimeout(() => chartInstance.current?.resize(), 100);
-	}, [series, selectedDate, axisRanges, hoveredMetric, selectedDimensions]);
+	}, [series, selectedDate, axisRanges, hoveredMetric, activeDimension, selectedDimensionValues]);
 
 	// 3. 自动同步可用日期列表
 	useEffect(() => {
@@ -219,10 +220,29 @@ function App() {
 		}
 	}, [series]);
 
-	// 4. 重置维度筛选（当日期变化时）
+	// 4. 初始化主维度（当数据导入或日期变化时）
 	useEffect(() => {
-		setSelectedDimensions({});
-	}, [selectedDate]);
+		const daySeries = series.filter(s => s.date === selectedDate);
+		const dims = [...new Set(daySeries.flatMap(s => Object.keys(s.dimensions)))];
+		if (dims.length > 0 && !activeDimension) {
+			setActiveDimension(dims[0]);
+		}
+		// 重置选中的维度值
+		setSelectedDimensionValues([]);
+	}, [selectedDate, series.length === 0]);
+
+	// 5. 处理维度值全选 (当主维度切换时)
+	useEffect(() => {
+		if (activeDimension) {
+			const values = [...new Set(
+				series
+					.filter(s => s.date === selectedDate)
+					.map(s => s.dimensions[activeDimension])
+					.filter(v => v !== undefined)
+			)];
+			setSelectedDimensionValues(values);
+		}
+	}, [activeDimension, selectedDate]);
 
 	/**
 	 * 处理文件上传
@@ -372,7 +392,8 @@ function App() {
 			const dt = (p2.time.getTime() - p1.time.getTime()) / (1000 * 3600); // 间隔小时数
 			total += (p1.value + p2.value) * dt / 2;
 		}
-		return total.toFixed(2);
+		const unitStr = data[0]?.unit ? `${data[0].unit}·h` : '项';
+		return `${total.toFixed(2)} ${unitStr}`;
 	};
 
 	/**
@@ -386,7 +407,11 @@ function App() {
 	 * 导出当前图表数据为 CSV
 	 */
 	const exportData = () => {
-		const activeSeries = series.filter(s => s.date === selectedDate);
+		const activeSeries = series.filter(s => {
+			if (s.date !== selectedDate) return false;
+			if (!activeDimension || selectedDimensionValues.length === 0) return true;
+			return selectedDimensionValues.includes(s.dimensions[activeDimension]);
+		});
 		if (activeSeries.length === 0) return;
 
 		// 收集所有的时间戳并排序
@@ -493,52 +518,51 @@ function App() {
 					</div>
 
 					{selectedDate && (
-						<div className="dimension-filters">
-							{/* 提取当前日期下所有可用的维度字段 */}
-							{[...new Set(
-								series
-									.filter(s => s.date === selectedDate)
-									.flatMap(s => Object.keys(s.dimensions))
-							)].map(dim => {
-								const values = [...new Set(
-									series
-										.filter(s => s.date === selectedDate)
-										.map(s => s.dimensions[dim])
-										.filter(v => v !== undefined)
-								)];
+						<div className="dimension-selector-outer">
+							<div className="filter-group">
+								<p className="label">分组维度切换</p>
+								<select
+									value={activeDimension}
+									onChange={(e) => setActiveDimension(e.target.value)}
+									className="styled-select-dim"
+								>
+									<option value="">-- 不进行维度拆分 --</option>
+									{[...new Set(
+										series
+											.filter(s => s.date === selectedDate)
+											.flatMap(s => Object.keys(s.dimensions))
+									)].map(d => <option key={d} value={d}>{d}</option>)}
+								</select>
+							</div>
 
-								if (values.length <= 1) return null;
-
-								return (
-									<div key={dim} className="filter-group">
-										<p className="label">{dim}</p>
-										<div className="dimension-tags">
-											<button
-												className={`dim-tag ${!selectedDimensions[dim] ? 'active' : ''}`}
-												onClick={() => setSelectedDimensions(prev => {
-													const next = { ...prev };
-													delete next[dim];
-													return next;
-												})}
-											>
-												全部
-											</button>
-											{values.map(v => (
+							{activeDimension && (
+								<div className="filter-group">
+									<p className="label">{activeDimension} 值选择 (类似图例切换)</p>
+									<div className="dimension-tags">
+										{[...new Set(
+											series
+												.filter(s => s.date === selectedDate)
+												.map(s => s.dimensions[activeDimension])
+												.filter(v => v !== undefined)
+										)].map(v => {
+											const isActive = selectedDimensionValues.includes(v);
+											return (
 												<button
 													key={v}
-													className={`dim-tag ${selectedDimensions[dim] === v ? 'active' : ''}`}
-													onClick={() => setSelectedDimensions(prev => ({
-														...prev,
-														[dim]: v
-													}))}
+													className={`dim-tag ${isActive ? 'active' : ''}`}
+													onClick={() => setSelectedDimensionValues(prev =>
+														isActive
+															? prev.filter(item => item !== v)
+															: [...prev, v]
+													)}
 												>
 													{v}
 												</button>
-											))}
-										</div>
+											);
+										})}
 									</div>
-								);
-							})}
+								</div>
+							)}
 						</div>
 					)}
 
@@ -557,19 +581,15 @@ function App() {
 						<p className="label">已选系列 ({
 							series.filter(s => {
 								if (s.date !== selectedDate) return false;
-								return Object.entries(selectedDimensions).every(([dim, val]) => {
-									if (!val) return true;
-									return s.dimensions[dim] === val;
-								});
+								if (!activeDimension || selectedDimensionValues.length === 0) return true;
+								return selectedDimensionValues.includes(s.dimensions[activeDimension]);
 							}).length
 						})</p>
 						<ul>
 							{series.filter(s => {
 								if (s.date !== selectedDate) return false;
-								return Object.entries(selectedDimensions).every(([dim, val]) => {
-									if (!val) return true;
-									return s.dimensions[dim] === val;
-								});
+								if (!activeDimension || selectedDimensionValues.length === 0) return true;
+								return selectedDimensionValues.includes(s.dimensions[activeDimension]);
 							}).map(s => (
 								<li key={s.id} className="series-item">
 									<div className="series-info">
@@ -577,7 +597,7 @@ function App() {
 										<div className="series-name-group">
 											<span title={s.name}>{s.name}</span>
 											{showIntegral && (
-												<span className="series-auc">积分项: {calculateIntegral(s.data)}</span>
+												<span className="series-auc">积分项: {calculateIntegral(s.data.map(d => ({ ...d, unit: s.unit })))}</span>
 											)}
 										</div>
 									</div>
@@ -599,10 +619,8 @@ function App() {
 							{[...new Set(
 								series.filter(s => {
 									if (s.date !== selectedDate) return false;
-									return Object.entries(selectedDimensions).every(([dim, val]) => {
-										if (!val) return true;
-										return s.dimensions[dim] === val;
-									});
+									if (!activeDimension || selectedDimensionValues.length === 0) return true;
+									return selectedDimensionValues.includes(s.dimensions[activeDimension]);
 								}).map(s => s.metricName || s.name)
 							)].map(metric => {
 								// 计算该指标及其在当前维度过滤下的真实数据范围
@@ -610,10 +628,8 @@ function App() {
 									.filter(s => {
 										if (s.date !== selectedDate) return false;
 										if (s.metricName !== metric && s.name !== metric) return false;
-										return Object.entries(selectedDimensions).every(([dim, val]) => {
-											if (!val) return true;
-											return s.dimensions[dim] === val;
-										});
+										if (!activeDimension || selectedDimensionValues.length === 0) return true;
+										return selectedDimensionValues.includes(s.dimensions[activeDimension]);
 									})
 									.flatMap(s => s.data.map(d => d.value));
 

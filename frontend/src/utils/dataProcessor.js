@@ -6,11 +6,9 @@ import { format } from 'date-fns';
  * @returns {Object} { time: Date, values: Object<string, number> }
  */
 const extractTimeAndSeries = (item) => {
-	// 1. 提取时间
+	// 1. 识别时间、维度与指标
 	const dateFields = ['日期', 'date', 'Date', 'day'];
 	const timeFields = ['时间', 'time', 'Time', 'Timestamp', 'timestamp'];
-	const dimensionFields = ['城市', 'City', 'city', '天气', 'Weather', '地区', 'Region', 'region'];
-	const nonMetricFields = [...dateFields, ...timeFields, ...dimensionFields, 'code', 'Code', '天气代码'];
 
 	let datePart = '';
 	let timePart = '';
@@ -44,25 +42,58 @@ const extractTimeAndSeries = (item) => {
 
 	const time = new Date(finalTimeStr.replace(/-/g, '/'));
 
-	// 2. 提取维度字段 (如城市、天气)
 	const dimensions = {};
-	dimensionFields.forEach(field => {
-		if (item[field]) {
-			dimensions[field] = item[field];
-		}
-	});
-
-	// 3. 提取所有数值型列
 	const values = {};
-	Object.keys(item).forEach(key => {
-		if (nonMetricFields.some(f => key.includes(f) || key === f)) return;
-		const val = parseFloat(item[key]);
-		if (!isNaN(val)) {
-			values[key] = val;
+
+	const allFields = Object.keys(item);
+	const timeRelated = [...dateFields, ...timeFields, 'code', 'Code', '天气代码'];
+
+	allFields.forEach(key => {
+		if (timeRelated.includes(key) || key === 'time' || key === 'date') return;
+
+		const val = item[key];
+		const numVal = parseFloat(val);
+
+		if (!isNaN(numVal) && !isNaN(val)) {
+			// 指标
+			values[key] = numVal;
+		} else if (val !== undefined && val !== null && val !== '') {
+			// 维度 (字符串)
+			dimensions[key] = val.toString();
 		}
 	});
 
 	return { time, values, dimensions };
+};
+
+/**
+ * 从名称中提取单位
+ * @param {string} name 
+ * @returns {string} unit
+ */
+const guessUnit = (name) => {
+	const unitMap = {
+		'温度': '℃',
+		'湿度': '%',
+		'雨量': 'mm',
+		'降水': 'mm',
+		'电压': 'V',
+		'电流': 'A',
+		'功率': 'W',
+		'压力': 'Pa',
+		'转速': 'rpm'
+	};
+
+	// 1. 尝试从括号中提取
+	const match = name.match(/[\(\（]([^\)\）]+)[\)\）]/);
+	if (match) return match[1];
+
+	// 2. 模糊匹配关键字
+	for (const [key, unit] of Object.entries(unitMap)) {
+		if (name.includes(key)) return unit;
+	}
+
+	return '';
 };
 
 /**
@@ -122,6 +153,8 @@ export const processDataLogic = (rawData, fileName) => {
 					simpleFileName = '手动导入';
 				}
 
+				const unit = guessUnit(metric);
+
 				// 构建更详细的名称，包含维度信息
 				const dimSuffix = Object.values(group.dimensions).length > 0
 					? ` (${Object.values(group.dimensions).join(', ')})`
@@ -133,6 +166,7 @@ export const processDataLogic = (rawData, fileName) => {
 					date: group.date,
 					dimensions: group.dimensions,
 					metricName: metric,
+					unit: unit,
 					id: Math.random().toString(36).substr(2, 9) + Date.now().toString(36).substr(-4)
 				});
 			}
