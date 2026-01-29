@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import * as echarts from 'echarts';
 import Papa from 'papaparse';
-import { Upload, FileText, ChevronRight, BarChart3, Trash2, ClipboardPaste, X, Download, RotateCcw } from 'lucide-react';
+import { Upload, FileText, ChevronRight, BarChart3, Trash2, ClipboardPaste, X, Download, RotateCcw, Moon, Sun, ChevronLeft, Layout } from 'lucide-react';
 import { format } from 'date-fns';
 import { processDataLogic } from './utils/dataProcessor';
 import './App.css';
@@ -30,36 +30,45 @@ function App() {
 	const [activeDimension, setActiveDimension] = useState(''); // 当前选中的分组维度字段，如 '城市'
 	const [selectedDimensionValues, setSelectedDimensionValues] = useState([]); // 选中的维度值列表，如 ['北京', '上海']
 
+	// 新增 UI 状态
+	const [theme, setTheme] = useState('dark'); // dark | light
+	const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(false);
+	const [sidebarWidth, setSidebarWidth] = useState(320);
+	const isResizing = useRef(false);
+
 	// 1. 生命周期管理：初始化与销毁
 	useEffect(() => {
 		if (chartRef.current) {
-			// 确保容器有尺寸
-			if (chartRef.current.clientWidth === 0) {
-				chartRef.current.style.width = '100%';
-				chartRef.current.style.height = '100%';
-			}
-
-			chartInstance.current = echarts.init(chartRef.current, 'dark');
-
-			// 鼠标移动监听：用于切换左侧纵坐标
-			chartInstance.current.on('mouseover', (params) => {
-				if (params.seriesName) {
-					// 提取指标名（过滤掉括号内容）
-					const metric = params.seriesName.split(' (')[0];
-					setHoveredMetric(metric);
+			const initChart = () => {
+				if (chartInstance.current) {
+					chartInstance.current.dispose();
 				}
-			});
+				chartInstance.current = echarts.init(chartRef.current, theme === 'dark' ? 'dark' : null);
 
-			chartInstance.current.on('mouseout', () => {
-				setHoveredMetric(null);
-			});
+				// 鼠标移动监听：用于切换左侧纵坐标
+				chartInstance.current.on('mouseover', (params) => {
+					if (params.seriesName) {
+						const metric = params.seriesName.split(' (')[0];
+						setHoveredMetric(metric);
+					}
+				});
+
+				chartInstance.current.on('mouseout', () => {
+					setHoveredMetric(null);
+				});
+
+				// 恢复之前的数据渲染（如果有）
+				if (series.length > 0) {
+					updateChart();
+				}
+			};
+
+			initChart();
 
 			const handleResize = () => {
 				chartInstance.current?.resize();
 			};
 			window.addEventListener('resize', handleResize);
-
-			// 模拟检测后端状态
 			checkBackend();
 
 			return () => {
@@ -68,7 +77,7 @@ function App() {
 				chartInstance.current = null;
 			};
 		}
-	}, []);
+	}, [theme]); // 主题切换时重新初始化
 
 	/**
 	 * 模拟检测后端
@@ -85,21 +94,11 @@ function App() {
 	};
 
 	// 2. 数据驱动：更新图表内容 (多轴支持)
-	useEffect(() => {
-		// 防御性检查：确保实例存在且未被销毁
-		if (!chartInstance.current || chartInstance.current.isDisposed()) {
-			// 尝试重新初始化（如果之前的 ref 仍然有效）
-			if (chartRef.current) {
-				chartInstance.current = echarts.init(chartRef.current, 'dark');
-			} else {
-				return;
-			}
-		}
+	const updateChart = () => {
+		if (!chartInstance.current || chartInstance.current.isDisposed()) return;
 
-		// 过滤出符合日期和维度筛选的系列
 		const activeSeries = series.filter(s => {
 			if (s.date !== selectedDate) return false;
-			// 如果没有选中维度或维度值，则显示全部
 			if (!activeDimension || selectedDimensionValues.length === 0) return true;
 			return selectedDimensionValues.includes(s.dimensions[activeDimension]);
 		});
@@ -109,16 +108,11 @@ function App() {
 			return;
 		}
 
-		// --- 动态多轴逻辑 ---
-		// 1. 识别所有独特的指标类型（用于创建共享轴）
-		// 优先使用 metricName (如果存在), 否则使用 name
 		const uniqueMetrics = [...new Set(activeSeries.map(s => s.metricName || s.name))];
+		const isLight = theme === 'light';
 
-		// 2. 生成 Y 轴配置
 		const yAxisConfig = uniqueMetrics.map((metric, index) => {
 			const customRange = axisRanges[metric] || {};
-
-			// 逻辑：如果没有任何悬停，显示第一个轴；如果有悬停，仅显示匹配的轴
 			const isActive = hoveredMetric ? (metric === hoveredMetric) : (index === 0);
 
 			return {
@@ -128,8 +122,8 @@ function App() {
 					color: isActive ? getUserColor(index) : 'transparent',
 					padding: [0, 0, 0, 10]
 				},
-				position: 'left', // 始终在左侧
-				show: isActive, // 非激活状态不显示，避免重叠
+				position: 'left',
+				show: isActive,
 				scale: true,
 				min: customRange.min !== '' && customRange.min !== undefined ? parseFloat(customRange.min) : null,
 				max: customRange.max !== '' && customRange.max !== undefined ? parseFloat(customRange.max) : null,
@@ -139,75 +133,76 @@ function App() {
 				},
 				axisLabel: {
 					show: true,
-					color: '#ccc'
+					color: isLight ? '#666' : '#ccc'
 				},
 				splitLine: {
 					show: isActive,
-					lineStyle: { color: 'rgba(255, 255, 255, 0.05)' }
+					lineStyle: { color: isLight ? 'rgba(0,0,0,0.05)' : 'rgba(255, 255, 255, 0.05)' }
 				}
 			};
 		});
-
-		// 计算右侧边距（现在不需要为多轴预留空间了）
-		const rightPercent = '5%';
 
 		const option = {
 			backgroundColor: 'transparent',
 			tooltip: {
 				trigger: 'axis',
-				backgroundColor: 'rgba(13, 13, 18, 0.9)',
-				borderColor: 'rgba(255, 255, 255, 0.2)',
-				textStyle: { color: '#fff' },
-				axisPointer: { type: 'cross' } // 十字准星，更适合多轴
+				backgroundColor: isLight ? 'rgba(255, 255, 255, 0.95)' : 'rgba(13, 13, 18, 0.9)',
+				borderColor: isLight ? 'rgba(0, 0, 0, 0.1)' : 'rgba(255, 255, 255, 0.2)',
+				textStyle: { color: isLight ? '#333' : '#fff' },
+				axisPointer: { type: 'cross' }
 			},
 			legend: {
 				data: activeSeries.map(s => s.name),
-				textStyle: { color: '#ccc' },
-				top: 10,
-				type: 'plain',
-				formatter: (name) => {
-					// 仅显示指标名，隐藏括号内的文件名部分
-					return name.split(' (')[0];
-				}
+				textStyle: { color: isLight ? '#666' : '#ccc', fontSize: 11 },
+				top: 5,
+				type: 'scroll',
+				pageTextStyle: { color: isLight ? '#333' : '#fff' },
+				formatter: (name) => name.split(' (')[0]
 			},
 			grid: {
-				left: '5%',
-				right: rightPercent, // 动态调整右边以容纳多轴
-				bottom: '10%',
+				top: '80', // 适当下移，避免图例重合
+				left: '40',
+				right: '40',
+				bottom: '40',
 				containLabel: true
 			},
 			xAxis: {
 				type: 'time',
-				axisLine: { lineStyle: { color: 'rgba(255, 255, 255, 0.2)' } },
+				axisLine: { lineStyle: { color: isLight ? 'rgba(0,0,0,0.1)' : 'rgba(255, 255, 255, 0.2)' } },
+				axisLabel: { color: isLight ? '#666' : '#ccc' },
 				splitLine: { show: false }
 			},
 			yAxis: yAxisConfig,
 			series: activeSeries.map((s, idx) => {
-				// 找到该序列对应的轴索引
 				const metricKey = s.metricName || s.name;
 				const axisIndex = uniqueMetrics.indexOf(metricKey);
 
 				return {
 					name: s.name,
 					type: 'line',
-					yAxisIndex: axisIndex, // 绑定到对应轴
+					yAxisIndex: axisIndex,
 					smooth: true,
-					showSymbol: true, // 加粗显示每个数值点
+					showSymbol: true,
 					symbol: 'circle',
-					symbolSize: 8,
+					symbolSize: 6,
 					data: s.data.map(d => [d.time, d.value]),
-					lineStyle: { width: 3 },
+					lineStyle: { width: 2 },
 					itemStyle: {
 						color: getUserColor(axisIndex),
-						borderWidth: 2
+						borderWidth: 1
 					}
 				};
 			})
 		};
 
 		chartInstance.current.setOption(option, true);
-		setTimeout(() => chartInstance.current?.resize(), 100);
-	}, [series, selectedDate, axisRanges, hoveredMetric, activeDimension, selectedDimensionValues]);
+	};
+
+	useEffect(() => {
+		updateChart();
+		const timer = setTimeout(() => chartInstance.current?.resize(), 300);
+		return () => clearTimeout(timer);
+	}, [series, selectedDate, axisRanges, hoveredMetric, activeDimension, selectedDimensionValues, sidebarWidth, isSidebarCollapsed]);
 
 	// 3. 自动同步可用日期列表
 	useEffect(() => {
@@ -297,6 +292,30 @@ function App() {
 
 		setPasteContent('');
 		setIsPasteModalOpen(false);
+	};
+
+	/**
+	 * 侧边栏缩放处理
+	 */
+	const handleMouseDown = (e) => {
+		isResizing.current = true;
+		document.addEventListener('mousemove', handleMouseMove);
+		document.addEventListener('mouseup', handleMouseUp);
+	};
+
+	const handleMouseMove = (e) => {
+		if (isResizing.current) {
+			const newWidth = e.clientX - 10;
+			if (newWidth >= 240 && newWidth <= 600) {
+				setSidebarWidth(newWidth);
+			}
+		}
+	};
+
+	const handleMouseUp = () => {
+		isResizing.current = false;
+		document.removeEventListener('mousemove', handleMouseMove);
+		document.removeEventListener('mouseup', handleMouseUp);
 	};
 
 	/**
@@ -452,9 +471,13 @@ function App() {
 		setSelectedDate('');
 	};
 
+	const toggleTheme = () => {
+		setTheme(prev => prev === 'dark' ? 'light' : 'dark');
+	};
+
 	return (
 		<div
-			className={`app-container ${isDragging ? 'dragging' : ''}`}
+			className={`app-container ${isDragging ? 'dragging' : ''} ${theme === 'light' ? 'light-theme' : ''}`}
 			onDrop={onDrop}
 			onDragOver={onDragOver}
 			onDragEnter={onDragEnter}
@@ -479,30 +502,49 @@ function App() {
 					</div>
 				</div>
 				<div className="nav-actions">
+					<button className="theme-toggle" onClick={toggleTheme} title="切换主题">
+						{theme === 'dark' ? <Sun size={18} /> : <Moon size={18} />}
+					</button>
 					<button className="nav-btn premium-button" onClick={() => setIsPasteModalOpen(true)}>
-						<ClipboardPaste size={18} />
+						<ClipboardPaste size={14} />
 						粘贴数据
 					</button>
 					<label className="upload-btn premium-button">
-						<Upload size={18} />
+						<Upload size={14} />
 						导入文件
 						<input type="file" accept=".csv,.json" onChange={handleFileUpload} hidden />
 					</label>
 					{selectedDate && (
-						<button className="nav-btn export-btn" onClick={exportData} title="导出当前视图数据">
-							<Download size={18} />
+						<button className="export-btn" onClick={exportData} title="导出当前视图数据">
+							<Download size={14} />
 							导出
 						</button>
 					)}
 					<button className="clear-btn" onClick={clearAll} title="清空所有数据">
-						<Trash2 size={18} />
+						<Trash2 size={14} />
 					</button>
 				</div>
 			</nav>
 
 			<main className="main-content">
-				<aside className="sidebar glass-panel">
+				<aside
+					className={`sidebar glass-panel ${isSidebarCollapsed ? 'collapsed' : ''}`}
+					style={{ '--sidebar-width': `${sidebarWidth}px` }}
+				>
+					<div className="sidebar-resizer" onMouseDown={handleMouseDown} />
+					<button
+						className="collapse-toggle"
+						onClick={() => setIsSidebarCollapsed(!isSidebarCollapsed)}
+						title={isSidebarCollapsed ? "展开控制台" : "折叠控制台"}
+					>
+						{isSidebarCollapsed ? <Layout size={14} /> : <ChevronLeft size={14} />}
+					</button>
+
 					<h3>分析控制台</h3>
+					<div className="help-guide glass-panel" style={{ padding: '8px', fontSize: '0.7rem', color: 'var(--text-mute)', marginBottom: '5px' }}>
+						💡 提示：将鼠标悬停在曲线上可切换左侧坐标轴。
+					</div>
+
 					<div className="date-selector">
 						<p className="label">日期筛选</p>
 						<select
