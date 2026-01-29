@@ -434,7 +434,7 @@ function App() {
 			<nav className="navbar glass-panel">
 				<div className="logo">
 					<BarChart3 className="logo-icon" />
-					<span>DataCurve <strong>Analyzer</strong></span>
+					<span><strong>数据曲线分析系统</strong></span>
 					<div className={`backend-status-badge ${backendStatus}`}>
 						<span className="status-dot"></span>
 						{backendStatus === 'online' ? '后端: 在线' : (backendStatus === 'checking' ? '正在连接...' : '后端: 离线 (本地模式)')}
@@ -618,7 +618,7 @@ function App() {
 			)}
 
 			<footer className="footer">
-				<p>© 2026 DataCurve Analyzer • 强大的曲线对比分析工具</p>
+				<p>© 2026 数据曲线分析系统 • 强大的曲线对比分析工具</p>
 			</footer>
 		</div>
 	);

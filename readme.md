@@ -1,4 +1,4 @@
-# 数据曲线分析助手 (DataCurve Analyzer)
+# 数据曲线分析系统 (DataCurve Analysis System)
 
 一个优雅、高效的 Web 数据分析工具，专注于时间序列数据的曲线展示与对比分析。
 
