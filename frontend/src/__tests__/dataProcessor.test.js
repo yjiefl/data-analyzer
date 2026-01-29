@@ -42,6 +42,37 @@ describe('processDataLogic', () => {
 		expect(firstTime.getHours()).toBe(0);
 	});
 
+	it('应当支持用户提供的具体数据格式 (__2026-01-28_2026-01-28.csv)', () => {
+		const rawData = [
+			{
+				"城市": "南宁",
+				"日期": "2026-01-28",
+				"时间": "00:00",
+				"温度(°C)": "12.4",
+				"相对湿度(%)": "82.0"
+			}
+		];
+		const result = processDataLogic(rawData, 'test.csv');
+		expect(result.length).toBe(1);
+		expect(result[0].data[0].value).toBe(12.4);
+		expect(result[0].date).toBe('2026-01-28');
+	});
+
+	it('应当支持带有单位的复杂中文表头 (用户实际数据)', () => {
+		const rawData = [
+			{
+				"城市": "南宁",
+				"日期": "2026-01-28",
+				"时间": "00:00",
+				"温度(°C)": "12.4",
+				"10米风速(km/h)": "3.7"
+			}
+		];
+		const result = processDataLogic(rawData, 'exact.csv');
+		expect(result.length).toBe(1);
+		expect(result[0].data[0].value).toBe(12.4);
+	});
+
 	it('应当智能匹配第一个数值列（无明确表头时）', () => {
 		const rawData = [
 			{ "Date": "2026-01-29 12:00", "RandomLabel": "X", "SecretValue": "42.5" }

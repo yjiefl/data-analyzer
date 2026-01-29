@@ -45,18 +45,28 @@ const extractTimeAndValue = (item) => {
 		if (fuzzyTimeKey) finalTimeStr = item[fuzzyTimeKey];
 	}
 
-	const time = new Date(finalTimeStr.replace(/\//g, '-')); // 兼容 2026/1/28 格式
+	// 使用 / 替换 - 以获得更好的浏览器兼容性 (特别是 Safari)
+	const time = new Date(finalTimeStr.replace(/-/g, '/'));
 
 	// 2. 提取数值
 	const valueFields = ['温度', 'value', 'Value', 'val', '数值', '结果', 'temp', 'Temp'];
 	let value = NaN;
 
+	// 优先精确匹配，再进行包含匹配
 	for (const field of valueFields) {
-		// 检查键名是否包含这些关键词（处理 "温度(°C)" 这种情况）
-		const actualKey = Object.keys(item).find(k => k.includes(field));
-		if (actualKey && item[actualKey] !== undefined) {
-			value = parseFloat(item[actualKey]);
+		if (item[field] !== undefined) {
+			value = parseFloat(item[field]);
 			if (!isNaN(value)) break;
+		}
+	}
+
+	if (isNaN(value)) {
+		for (const field of valueFields) {
+			const actualKey = Object.keys(item).find(k => k.includes(field));
+			if (actualKey && item[actualKey] !== undefined) {
+				value = parseFloat(item[actualKey]);
+				if (!isNaN(value)) break;
+			}
 		}
 	}
 

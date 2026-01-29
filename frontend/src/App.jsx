@@ -176,7 +176,10 @@ function App() {
 	 */
 	const processData = (rawData, fileName) => {
 		const newSeries = processDataLogic(rawData, fileName);
-		if (newSeries.length === 0) return;
+		if (newSeries.length === 0) {
+			alert(`无法从 ${fileName} 中解析出有效的曲线数据。请确保文件包含日期、时间以及数值列。`);
+			return;
+		}
 
 		setSeries(prev => [...prev, ...newSeries]);
 
