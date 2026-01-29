@@ -21,6 +21,9 @@ function App() {
 	const chartRef = useRef(null);
 	const chartInstance = useRef(null);
 
+	// 轴范围设置：{ metricName: { min: '', max: '' } }
+	const [axisRanges, setAxisRanges] = useState({});
+
 	// 1. 生命周期管理：初始化与销毁
 	useEffect(() => {
 		if (chartRef.current) {
@@ -75,6 +78,8 @@ function App() {
 			// 如果超过2个轴，右侧轴向右偏移
 			const offset = index > 1 ? (index - 1) * 60 : 0;
 
+			const customRange = axisRanges[metric] || {};
+
 			return {
 				type: 'value',
 				name: metric, // 轴名称显示指标名
@@ -85,6 +90,8 @@ function App() {
 				position: isLeft ? 'left' : 'right',
 				offset: offset,
 				scale: true, // 自动缩放
+				min: customRange.min !== '' && customRange.min !== undefined ? parseFloat(customRange.min) : null,
+				max: customRange.max !== '' && customRange.max !== undefined ? parseFloat(customRange.max) : null,
 				axisLine: {
 					show: true,
 					lineStyle: { color: getUserColor(index) } // 轴线颜色与数据对齐
@@ -141,17 +148,22 @@ function App() {
 					type: 'line',
 					yAxisIndex: axisIndex, // 绑定到对应轴
 					smooth: true,
-					showSymbol: false,
+					showSymbol: true, // 加粗显示每个数值点
+					symbol: 'circle',
+					symbolSize: 8,
 					data: s.data.map(d => [d.time, d.value]),
 					lineStyle: { width: 3 },
-					itemStyle: { color: getUserColor(axisIndex) } // 让同一类指标颜色接近，或者区分不同指标
+					itemStyle: {
+						color: getUserColor(axisIndex),
+						borderWidth: 2
+					}
 				};
 			})
 		};
 
 		chartInstance.current.setOption(option, true);
 		setTimeout(() => chartInstance.current?.resize(), 100);
-	}, [series, selectedDate]);
+	}, [series, selectedDate, axisRanges]);
 
 	/**
 	 * 处理文件上传
@@ -203,6 +215,7 @@ function App() {
 	 */
 	const onDrop = (e) => {
 		e.preventDefault();
+		e.stopPropagation();
 		setIsDragging(false);
 		const files = e.dataTransfer.files;
 		if (files.length > 0) {
@@ -212,11 +225,23 @@ function App() {
 
 	const onDragOver = (e) => {
 		e.preventDefault();
+		e.stopPropagation();
 		setIsDragging(true);
 	};
 
-	const onDragLeave = () => {
-		setIsDragging(false);
+	const onDragEnter = (e) => {
+		e.preventDefault();
+		e.stopPropagation();
+		setIsDragging(true);
+	};
+
+	const onDragLeave = (e) => {
+		e.preventDefault();
+		e.stopPropagation();
+		// 只有当离开的是顶层容器时才取消
+		if (e.currentTarget === e.target) {
+			setIsDragging(false);
+		}
 	};
 
 	/**
@@ -278,6 +303,7 @@ function App() {
 			className={`app-container ${isDragging ? 'dragging' : ''}`}
 			onDrop={onDrop}
 			onDragOver={onDragOver}
+			onDragEnter={onDragEnter}
 			onDragLeave={onDragLeave}
 		>
 			{isDragging && (
@@ -338,6 +364,37 @@ function App() {
 							))}
 						</ul>
 					</div>
+
+					{selectedDate && (
+						<div className="axis-controls">
+							<p className="label">坐标轴设置</p>
+							{[...new Set(series.filter(s => s.date === selectedDate).map(s => s.metricName || s.name))].map(metric => (
+								<div key={metric} className="axis-input-group glass-panel">
+									<span className="axis-name">{metric}</span>
+									<div className="input-row">
+										<input
+											type="number"
+											placeholder="最小值"
+											value={axisRanges[metric]?.min || ''}
+											onChange={(e) => setAxisRanges(prev => ({
+												...prev,
+												[metric]: { ...prev[metric], min: e.target.value }
+											}))}
+										/>
+										<input
+											type="number"
+											placeholder="最大值"
+											value={axisRanges[metric]?.max || ''}
+											onChange={(e) => setAxisRanges(prev => ({
+												...prev,
+												[metric]: { ...prev[metric], max: e.target.value }
+											}))}
+										/>
+									</div>
+								</div>
+							))}
+						</div>
+					)}
 				</aside>
 
 				<section className="chart-area glass-panel">

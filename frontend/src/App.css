@@ -343,3 +343,54 @@
 	color: rgba(255, 255, 255, 0.2);
 	margin-top: 10px;
 }
+
+/* Axis Controls */
+.axis-controls {
+	margin-top: 20px;
+	display: flex;
+	flex-direction: column;
+	gap: 10px;
+	max-height: 200px;
+	overflow-y: auto;
+	padding-right: 5px;
+}
+
+.axis-input-group {
+	padding: 10px;
+	display: flex;
+	flex-direction: column;
+	gap: 8px;
+}
+
+.axis-name {
+	font-size: 0.75rem;
+	color: #a855f7;
+	font-weight: 500;
+	white-space: nowrap;
+	overflow: hidden;
+	text-overflow: ellipsis;
+}
+
+.input-row {
+	display: flex;
+	gap: 5px;
+}
+
+.input-row input {
+	width: 50%;
+	background: rgba(0, 0, 0, 0.2);
+	border: 1px solid rgba(255, 255, 255, 0.1);
+	border-radius: 4px;
+	color: #fff;
+	padding: 5px 8px;
+	font-size: 0.7rem;
+	outline: none;
+}
+
+.input-row input:focus {
+	border-color: #a855f7;
+}
+
+.input-row input::placeholder {
+	color: #444;
+}
