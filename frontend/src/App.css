@@ -556,22 +556,35 @@
 	gap: 4px;
 }
 
-.styled-select-compact {
-	width: 100%;
-	padding: 6px 10px;
-	background: rgba(255, 255, 255, 0.05);
-	border: 1px solid rgba(255, 255, 255, 0.1);
-	border-radius: 8px;
-	color: #fff;
-	font-size: 0.8rem;
-	cursor: pointer;
-	outline: none;
-	transition: all 0.2s;
+.dimension-tags {
+	display: flex;
+	flex-wrap: wrap;
+	gap: 6px;
 }
 
-.styled-select-compact:focus {
-	border-color: #a855f7;
-	background: rgba(168, 85, 247, 0.05);
+.dim-tag {
+	padding: 4px 10px;
+	background: rgba(255, 255, 255, 0.05);
+	border: 1px solid rgba(255, 255, 255, 0.1);
+	border-radius: 100px;
+	color: #aaa;
+	font-size: 0.75rem;
+	cursor: pointer;
+	transition: all 0.2s;
+	white-space: nowrap;
+}
+
+.dim-tag:hover {
+	background: rgba(255, 255, 255, 0.1);
+	color: #fff;
+	border-color: rgba(255, 255, 255, 0.3);
+}
+
+.dim-tag.active {
+	background: rgba(168, 85, 247, 0.2);
+	color: #fff;
+	border-color: rgba(168, 85, 247, 0.5);
+	box-shadow: 0 0 10px rgba(168, 85, 247, 0.2);
 }
 
 .input-row input::placeholder {

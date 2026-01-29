@@ -507,24 +507,35 @@ function App() {
 										.filter(v => v !== undefined)
 								)];
 
-								if (values.length <= 1) return null; // 只有一个选项则不显示下拉框
+								if (values.length <= 1) return null;
 
 								return (
 									<div key={dim} className="filter-group">
 										<p className="label">{dim}</p>
-										<select
-											value={selectedDimensions[dim] || ''}
-											onChange={(e) => setSelectedDimensions(prev => ({
-												...prev,
-												[dim]: e.target.value
-											}))}
-											className="styled-select-compact"
-										>
-											<option value="">全部{dim}</option>
+										<div className="dimension-tags">
+											<button
+												className={`dim-tag ${!selectedDimensions[dim] ? 'active' : ''}`}
+												onClick={() => setSelectedDimensions(prev => {
+													const next = { ...prev };
+													delete next[dim];
+													return next;
+												})}
+											>
+												全部
+											</button>
 											{values.map(v => (
-												<option key={v} value={v}>{v}</option>
+												<button
+													key={v}
+													className={`dim-tag ${selectedDimensions[dim] === v ? 'active' : ''}`}
+													onClick={() => setSelectedDimensions(prev => ({
+														...prev,
+														[dim]: v
+													}))}
+												>
+													{v}
+												</button>
 											))}
-										</select>
+										</div>
 									</div>
 								);
 							})}
