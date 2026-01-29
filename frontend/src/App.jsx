@@ -21,29 +21,55 @@ function App() {
 	const chartRef = useRef(null);
 	const chartInstance = useRef(null);
 
-	// 初始化图表
+	// 1. 生命周期管理：初始化与销毁
 	useEffect(() => {
 		if (chartRef.current) {
+			// 确保容器有尺寸
+			if (chartRef.current.clientWidth === 0) {
+				chartRef.current.style.width = '100%';
+				chartRef.current.style.height = '100%';
+			}
+
 			chartInstance.current = echarts.init(chartRef.current, 'dark');
-			window.addEventListener('resize', () => chartInstance.current?.resize());
+
+			const handleResize = () => {
+				chartInstance.current?.resize();
+			};
+			window.addEventListener('resize', handleResize);
+
+			return () => {
+				window.removeEventListener('resize', handleResize);
+				chartInstance.current?.dispose();
+				chartInstance.current = null;
+			};
 		}
-		return () => {
-			chartInstance.current?.dispose();
-		};
 	}, []);
 
-	// 当数据或选择的日期变化时更新图表
+	// 2. 数据驱动：更新图表内容
 	useEffect(() => {
-		if (!chartInstance.current) return;
+		// 防御性检查：确保实例存在且未被销毁
+		if (!chartInstance.current || chartInstance.current.isDisposed()) {
+			// 尝试重新初始化（如果之前的 ref 仍然有效）
+			if (chartRef.current) {
+				chartInstance.current = echarts.init(chartRef.current, 'dark');
+			} else {
+				return;
+			}
+		}
 
 		const activeSeries = series.filter(s => s.date === selectedDate);
+
+		if (activeSeries.length === 0 || !selectedDate) {
+			chartInstance.current.clear();
+			return;
+		}
 
 		const option = {
 			backgroundColor: 'transparent',
 			tooltip: {
 				trigger: 'axis',
 				backgroundColor: 'rgba(13, 13, 18, 0.9)',
-				borderColor: 'rgba(255, 255, 255, 0.1)',
+				borderColor: 'rgba(255, 255, 255, 0.2)',
 				textStyle: { color: '#fff' }
 			},
 			legend: {
@@ -54,7 +80,7 @@ function App() {
 			grid: {
 				left: '3%',
 				right: '4%',
-				bottom: '3%',
+				bottom: '10%',
 				containLabel: true
 			},
 			xAxis: {
@@ -64,6 +90,7 @@ function App() {
 			},
 			yAxis: {
 				type: 'value',
+				scale: true, // 自动缩放坐标轴，使曲线更清晰
 				axisLine: { lineStyle: { color: 'rgba(255, 255, 255, 0.2)' } },
 				splitLine: { lineStyle: { color: 'rgba(255, 255, 255, 0.05)' } }
 			},
@@ -78,6 +105,7 @@ function App() {
 		};
 
 		chartInstance.current.setOption(option, true);
+		setTimeout(() => chartInstance.current?.resize(), 100);
 	}, [series, selectedDate]);
 
 	/**
@@ -268,7 +296,7 @@ function App() {
 				</aside>
 
 				<section className="chart-area glass-panel">
-					{!selectedDate ? (
+					{!selectedDate && (
 						<div className="empty-state">
 							<Upload size={64} className="accent-color floating" />
 							<h2>开始分析</h2>
@@ -277,9 +305,17 @@ function App() {
 								<span>CSV</span> • <span>JSON</span> • <span>TXT</span>
 							</div>
 						</div>
-					) : (
-						<div ref={chartRef} className="chart-container"></div>
 					)}
+					<div
+						ref={chartRef}
+						className="chart-container"
+						style={{
+							flex: 1,
+							width: '100%',
+							height: '100%',
+							opacity: selectedDate ? 1 : 0
+						}}
+					></div>
 				</section>
 			</main>
 
