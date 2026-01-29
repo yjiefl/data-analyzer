@@ -448,46 +448,52 @@ function App() {
 					{selectedDate && (
 						<div className="axis-controls">
 							<p className="label">坐标轴设置</p>
-							{[...new Set(series.filter(s => s.date === selectedDate).map(s => s.metricName || s.name))].map(metric => (
-								<div key={metric} className="axis-input-group-compact glass-panel">
-									<div className="axis-header">
-										<span className="axis-name" title={metric}>{metric}</span>
+							{[...new Set(series.filter(s => s.date === selectedDate).map(s => s.metricName || s.name))].map(metric => {
+								const metricDataPoints = series
+									.filter(s => s.date === selectedDate && (s.metricName === metric || s.name === metric))
+									.flatMap(s => s.data.map(d => d.value));
+
+								const dataMin = metricDataPoints.length > 0 ? Math.min(...metricDataPoints).toFixed(1) : '-';
+								const dataMax = metricDataPoints.length > 0 ? Math.max(...metricDataPoints).toFixed(1) : '-';
+
+								return (
+									<div key={metric} className="axis-row-compact glass-panel">
+										<span className="axis-label-text" title={metric}>{metric}</span>
+										<div className="axis-inputs">
+											<input
+												type="number"
+												placeholder={dataMin}
+												value={axisRanges[metric]?.min || ''}
+												onChange={(e) => setAxisRanges(prev => ({
+													...prev,
+													[metric]: { ...prev[metric], min: e.target.value }
+												}))}
+											/>
+											<span className="axis-sep">-</span>
+											<input
+												type="number"
+												placeholder={dataMax}
+												value={axisRanges[metric]?.max || ''}
+												onChange={(e) => setAxisRanges(prev => ({
+													...prev,
+													[metric]: { ...prev[metric], max: e.target.value }
+												}))}
+											/>
+										</div>
 										<button
-											className="reset-axis-btn"
+											className="axis-reset-icon-btn"
 											onClick={() => setAxisRanges(prev => {
 												const next = { ...prev };
 												delete next[metric];
 												return next;
 											})}
-											title="恢复默认范围"
+											title={`重置到默认范围 (${dataMin} ~ ${dataMax})`}
 										>
-											<RotateCcw size={12} />
-											默认
+											<RotateCcw size={14} />
 										</button>
 									</div>
-									<div className="input-row">
-										<input
-											type="number"
-											placeholder="Min"
-											value={axisRanges[metric]?.min || ''}
-											onChange={(e) => setAxisRanges(prev => ({
-												...prev,
-												[metric]: { ...prev[metric], min: e.target.value }
-											}))}
-										/>
-										<span className="separator">-</span>
-										<input
-											type="number"
-											placeholder="Max"
-											value={axisRanges[metric]?.max || ''}
-											onChange={(e) => setAxisRanges(prev => ({
-												...prev,
-												[metric]: { ...prev[metric], max: e.target.value }
-											}))}
-										/>
-									</div>
-								</div>
-							))}
+								);
+							})}
 						</div>
 					)}
 				</aside>
