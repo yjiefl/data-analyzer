@@ -542,6 +542,38 @@
 	color: #fff;
 }
 
+.dimension-filters {
+	display: flex;
+	flex-direction: column;
+	gap: 12px;
+	padding: 0 10px;
+	margin-bottom: 5px;
+}
+
+.filter-group {
+	display: flex;
+	flex-direction: column;
+	gap: 4px;
+}
+
+.styled-select-compact {
+	width: 100%;
+	padding: 6px 10px;
+	background: rgba(255, 255, 255, 0.05);
+	border: 1px solid rgba(255, 255, 255, 0.1);
+	border-radius: 8px;
+	color: #fff;
+	font-size: 0.8rem;
+	cursor: pointer;
+	outline: none;
+	transition: all 0.2s;
+}
+
+.styled-select-compact:focus {
+	border-color: #a855f7;
+	background: rgba(168, 85, 247, 0.05);
+}
+
 .input-row input::placeholder {
 	color: #444;
 }

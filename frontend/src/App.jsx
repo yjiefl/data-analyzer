@@ -26,6 +26,7 @@ function App() {
 	const [showIntegral, setShowIntegral] = useState(false);
 	const [hoveredMetric, setHoveredMetric] = useState(null);
 	const [backendStatus, setBackendStatus] = useState('offline'); // online | offline | checking
+	const [selectedDimensions, setSelectedDimensions] = useState({}); // { 城市: '北京', 天气: '晴' }
 
 	// 1. 生命周期管理：初始化与销毁
 	useEffect(() => {
@@ -93,7 +94,14 @@ function App() {
 			}
 		}
 
-		const activeSeries = series.filter(s => s.date === selectedDate);
+		// 过滤出符合日期和所有选中维度的系列
+		const activeSeries = series.filter(s => {
+			if (s.date !== selectedDate) return false;
+			return Object.entries(selectedDimensions).every(([dim, val]) => {
+				if (!val) return true;
+				return s.dimensions[dim] === val;
+			});
+		});
 
 		if (activeSeries.length === 0 || !selectedDate) {
 			chartInstance.current.clear();
@@ -198,7 +206,7 @@ function App() {
 
 		chartInstance.current.setOption(option, true);
 		setTimeout(() => chartInstance.current?.resize(), 100);
-	}, [series, selectedDate, axisRanges, hoveredMetric]);
+	}, [series, selectedDate, axisRanges, hoveredMetric, selectedDimensions]);
 
 	// 3. 自动同步可用日期列表
 	useEffect(() => {
@@ -210,6 +218,11 @@ function App() {
 			setSelectedDate(dates.length > 0 ? dates[0] : '');
 		}
 	}, [series]);
+
+	// 4. 重置维度筛选（当日期变化时）
+	useEffect(() => {
+		setSelectedDimensions({});
+	}, [selectedDate]);
 
 	/**
 	 * 处理文件上传
@@ -479,6 +492,45 @@ function App() {
 						</select>
 					</div>
 
+					{selectedDate && (
+						<div className="dimension-filters">
+							{/* 提取当前日期下所有可用的维度字段 */}
+							{[...new Set(
+								series
+									.filter(s => s.date === selectedDate)
+									.flatMap(s => Object.keys(s.dimensions))
+							)].map(dim => {
+								const values = [...new Set(
+									series
+										.filter(s => s.date === selectedDate)
+										.map(s => s.dimensions[dim])
+										.filter(v => v !== undefined)
+								)];
+
+								if (values.length <= 1) return null; // 只有一个选项则不显示下拉框
+
+								return (
+									<div key={dim} className="filter-group">
+										<p className="label">{dim}</p>
+										<select
+											value={selectedDimensions[dim] || ''}
+											onChange={(e) => setSelectedDimensions(prev => ({
+												...prev,
+												[dim]: e.target.value
+											}))}
+											className="styled-select-compact"
+										>
+											<option value="">全部{dim}</option>
+											{values.map(v => (
+												<option key={v} value={v}>{v}</option>
+											))}
+										</select>
+									</div>
+								);
+							})}
+						</div>
+					)}
+
 					<div className="analysis-options">
 						<label className="checkbox-label">
 							<input
@@ -491,9 +543,23 @@ function App() {
 					</div>
 
 					<div className="series-list">
-						<p className="label">已选系列 ({series.filter(s => s.date === selectedDate).length})</p>
+						<p className="label">已选系列 ({
+							series.filter(s => {
+								if (s.date !== selectedDate) return false;
+								return Object.entries(selectedDimensions).every(([dim, val]) => {
+									if (!val) return true;
+									return s.dimensions[dim] === val;
+								});
+							}).length
+						})</p>
 						<ul>
-							{series.filter(s => s.date === selectedDate).map(s => (
+							{series.filter(s => {
+								if (s.date !== selectedDate) return false;
+								return Object.entries(selectedDimensions).every(([dim, val]) => {
+									if (!val) return true;
+									return s.dimensions[dim] === val;
+								});
+							}).map(s => (
 								<li key={s.id} className="series-item">
 									<div className="series-info">
 										<ChevronRight size={14} className="accent-color" />
@@ -519,9 +585,25 @@ function App() {
 					{selectedDate && (
 						<div className="axis-controls">
 							<p className="label">坐标轴设置</p>
-							{[...new Set(series.filter(s => s.date === selectedDate).map(s => s.metricName || s.name))].map(metric => {
+							{[...new Set(
+								series.filter(s => {
+									if (s.date !== selectedDate) return false;
+									return Object.entries(selectedDimensions).every(([dim, val]) => {
+										if (!val) return true;
+										return s.dimensions[dim] === val;
+									});
+								}).map(s => s.metricName || s.name)
+							)].map(metric => {
+								// 计算该指标及其在当前维度过滤下的真实数据范围
 								const metricDataPoints = series
-									.filter(s => s.date === selectedDate && (s.metricName === metric || s.name === metric))
+									.filter(s => {
+										if (s.date !== selectedDate) return false;
+										if (s.metricName !== metric && s.name !== metric) return false;
+										return Object.entries(selectedDimensions).every(([dim, val]) => {
+											if (!val) return true;
+											return s.dimensions[dim] === val;
+										});
+									})
 									.flatMap(s => s.data.map(d => d.value));
 
 								const dataMin = metricDataPoints.length > 0 ? Math.min(...metricDataPoints).toFixed(1) : '-';
