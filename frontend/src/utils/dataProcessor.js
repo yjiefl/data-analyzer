@@ -1,6 +1,80 @@
 import { format } from 'date-fns';
 
 /**
+ * 智能识别并处理多列数据
+ * @param {Object} item - 原始数据行
+ * @returns {Object} { time: Date, value: Number }
+ */
+const extractTimeAndValue = (item) => {
+	// 1. 提取时间
+	// 支持的日期/时间字段名
+	const dateFields = ['日期', 'date', 'Date', 'day'];
+	const timeFields = ['时间', 'time', 'Time', 'Timestamp', 'timestamp'];
+
+	let datePart = '';
+	let timePart = '';
+
+	// 查找日期列
+	for (const field of dateFields) {
+		if (item[field]) {
+			datePart = item[field];
+			break;
+		}
+	}
+
+	// 查找时间列
+	for (const field of timeFields) {
+		if (item[field]) {
+			timePart = item[field];
+			break;
+		}
+	}
+
+	// 如果日期和时间分开了（如用户图示），合并它们
+	let finalTimeStr = '';
+	if (datePart && timePart) {
+		finalTimeStr = `${datePart} ${timePart}`;
+	} else {
+		finalTimeStr = datePart || timePart || '';
+	}
+
+	// 兜底：如果没找到明确的字段，尝试找包含 date 或 time 的任何字段
+	if (!finalTimeStr) {
+		const keys = Object.keys(item);
+		const fuzzyTimeKey = keys.find(k => k.toLowerCase().includes('time') || k.toLowerCase().includes('date') || k.includes('时间') || k.includes('日期'));
+		if (fuzzyTimeKey) finalTimeStr = item[fuzzyTimeKey];
+	}
+
+	const time = new Date(finalTimeStr.replace(/\//g, '-')); // 兼容 2026/1/28 格式
+
+	// 2. 提取数值
+	const valueFields = ['温度', 'value', 'Value', 'val', '数值', '结果', 'temp', 'Temp'];
+	let value = NaN;
+
+	for (const field of valueFields) {
+		// 检查键名是否包含这些关键词（处理 "温度(°C)" 这种情况）
+		const actualKey = Object.keys(item).find(k => k.includes(field));
+		if (actualKey && item[actualKey] !== undefined) {
+			value = parseFloat(item[actualKey]);
+			if (!isNaN(value)) break;
+		}
+	}
+
+	// 兜底：如果没找到明确的数值字段，取第一个数值类型的列
+	if (isNaN(value)) {
+		for (const key in item) {
+			const val = parseFloat(item[key]);
+			if (!isNaN(val) && typeof item[key] !== 'boolean' && !key.toLowerCase().includes('date') && !key.toLowerCase().includes('time')) {
+				value = val;
+				break;
+			}
+		}
+	}
+
+	return { time, value };
+};
+
+/**
  * 处理解析后的原始数据并进行日期分组
  * @param {Array} rawData - 原始数据数组
  * @param {string} fileName - 文件名
@@ -10,15 +84,7 @@ export const processDataLogic = (rawData, fileName) => {
 	if (!Array.isArray(rawData)) return [];
 
 	const formattedData = rawData
-		.map(item => {
-			const timeStr = item.time || item.Timestamp || item.date;
-			const valStr = item.value || item.Value || item.val;
-
-			const time = new Date(timeStr);
-			const value = parseFloat(valStr);
-
-			return { time, value };
-		})
+		.map(item => extractTimeAndValue(item))
 		.filter(item => !isNaN(item.time.getTime()) && !isNaN(item.value));
 
 	if (formattedData.length === 0) return [];

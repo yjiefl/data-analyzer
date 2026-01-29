@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import * as echarts from 'echarts';
 import Papa from 'papaparse';
-import { Upload, FileText, ChevronRight, BarChart3, Trash2 } from 'lucide-react';
+import { Upload, FileText, ChevronRight, BarChart3, Trash2, ClipboardPaste, X } from 'lucide-react';
 import { format } from 'date-fns';
 import { processDataLogic } from './utils/dataProcessor';
 import './App.css';
@@ -11,10 +11,13 @@ import './App.css';
  * @returns {JSX.Element}
  */
 function App() {
-	// 存储所有导入的数据系列 [ { name: string, data: [{time, value}], date: string } ]
 	const [series, setSeries] = useState([]);
 	const [selectedDate, setSelectedDate] = useState('');
 	const [availableDates, setAvailableDates] = useState([]);
+	const [isPasteModalOpen, setIsPasteModalOpen] = useState(false);
+	const [pasteContent, setPasteContent] = useState('');
+	const [isDragging, setIsDragging] = useState(false);
+
 	const chartRef = useRef(null);
 	const chartInstance = useRef(null);
 
@@ -33,14 +36,13 @@ function App() {
 	useEffect(() => {
 		if (!chartInstance.current) return;
 
-		// 过滤出选中日期的所有系列
 		const activeSeries = series.filter(s => s.date === selectedDate);
 
 		const option = {
 			backgroundColor: 'transparent',
 			tooltip: {
 				trigger: 'axis',
-				backgroundColor: 'rgba(13, 13, 18, 0.8)',
+				backgroundColor: 'rgba(13, 13, 18, 0.9)',
 				borderColor: 'rgba(255, 255, 255, 0.1)',
 				textStyle: { color: '#fff' }
 			},
@@ -80,10 +82,9 @@ function App() {
 
 	/**
 	 * 处理文件上传
-	 * @param {Event} e 
 	 */
 	const handleFileUpload = (e) => {
-		const file = e.target.files[0];
+		const file = e.target.files ? e.target.files[0] : e;
 		if (!file) return;
 
 		const reader = new FileReader();
@@ -93,15 +94,60 @@ function App() {
 				parseCSV(content, file.name);
 			} else if (file.name.endsWith('.json')) {
 				parseJSON(content, file.name);
+			} else {
+				// 尝试自动识别
+				if (content.trim().startsWith('[') || content.trim().startsWith('{')) {
+					parseJSON(content, file.name);
+				} else {
+					parseCSV(content, file.name);
+				}
 			}
 		};
 		reader.readAsText(file);
 	};
 
 	/**
-	 * 解析 CSV 数据
-	 * @param {string} csvContent 
-	 * @param {string} fileName 
+	 * 处理粘贴内容
+	 */
+	const handlePasteSubmit = () => {
+		if (!pasteContent.trim()) return;
+
+		const timestamp = format(new Date(), 'HHmm');
+		const name = `粘贴数据_${timestamp}`;
+
+		if (pasteContent.trim().startsWith('[') || pasteContent.trim().startsWith('{')) {
+			parseJSON(pasteContent, name);
+		} else {
+			parseCSV(pasteContent, name);
+		}
+
+		setPasteContent('');
+		setIsPasteModalOpen(false);
+	};
+
+	/**
+	 * 拖拽处理
+	 */
+	const onDrop = (e) => {
+		e.preventDefault();
+		setIsDragging(false);
+		const files = e.dataTransfer.files;
+		if (files.length > 0) {
+			handleFileUpload(files[0]);
+		}
+	};
+
+	const onDragOver = (e) => {
+		e.preventDefault();
+		setIsDragging(true);
+	};
+
+	const onDragLeave = () => {
+		setIsDragging(false);
+	};
+
+	/**
+	 * 解析 CSV
 	 */
 	const parseCSV = (csvContent, fileName) => {
 		Papa.parse(csvContent, {
@@ -114,9 +160,7 @@ function App() {
 	};
 
 	/**
-	 * 解析 JSON 数据
-	 * @param {string} jsonContent 
-	 * @param {string} fileName 
+	 * 解析 JSON
 	 */
 	const parseJSON = (jsonContent, fileName) => {
 		try {
@@ -128,9 +172,7 @@ function App() {
 	};
 
 	/**
-	 * 处理解析后的数据并进行日期分组
-	 * @param {Array} rawData 
-	 * @param {string} fileName 
+	 * 处理数据
 	 */
 	const processData = (rawData, fileName) => {
 		const newSeries = processDataLogic(rawData, fileName);
@@ -138,14 +180,12 @@ function App() {
 
 		setSeries(prev => [...prev, ...newSeries]);
 
-		// 更新可用日期
 		setAvailableDates(prev => {
 			const currentDates = newSeries.map(s => s.date);
 			const combined = [...new Set([...prev, ...currentDates])];
 			return combined.sort();
 		});
 
-		// 如果当前没选日期，默认选第一个
 		if (!selectedDate && newSeries.length > 0) {
 			setSelectedDate(newSeries[0].date);
 		}
@@ -158,19 +198,37 @@ function App() {
 	};
 
 	return (
-		<div className="app-container">
+		<div
+			className={`app-container ${isDragging ? 'dragging' : ''}`}
+			onDrop={onDrop}
+			onDragOver={onDragOver}
+			onDragLeave={onDragLeave}
+		>
+			{isDragging && (
+				<div className="drag-overlay">
+					<div className="drag-message">
+						<Upload size={64} />
+						<h2>松开鼠标导入文件</h2>
+					</div>
+				</div>
+			)}
+
 			<nav className="navbar glass-panel">
 				<div className="logo">
 					<BarChart3 className="logo-icon" />
 					<span>DataCurve <strong>Analyzer</strong></span>
 				</div>
 				<div className="nav-actions">
+					<button className="nav-btn premium-button" onClick={() => setIsPasteModalOpen(true)}>
+						<ClipboardPaste size={18} />
+						粘贴数据
+					</button>
 					<label className="upload-btn premium-button">
 						<Upload size={18} />
-						导入数据
+						导入文件
 						<input type="file" accept=".csv,.json" onChange={handleFileUpload} hidden />
 					</label>
-					<button className="clear-btn" onClick={clearAll}>
+					<button className="clear-btn" onClick={clearAll} title="清空所有数据">
 						<Trash2 size={18} />
 					</button>
 				</div>
@@ -178,9 +236,9 @@ function App() {
 
 			<main className="main-content">
 				<aside className="sidebar glass-panel">
-					<h3>分析列表</h3>
+					<h3>分析控制台</h3>
 					<div className="date-selector">
-						<p className="label">选择日期查看对比</p>
+						<p className="label">日期筛选</p>
 						<select
 							value={selectedDate}
 							onChange={(e) => setSelectedDate(e.target.value)}
@@ -194,11 +252,11 @@ function App() {
 					</div>
 
 					<div className="series-list">
-						<p className="label">当前日期曲线 ({series.filter(s => s.date === selectedDate).length})</p>
+						<p className="label">已选系列 ({series.filter(s => s.date === selectedDate).length})</p>
 						<ul>
 							{series.filter(s => s.date === selectedDate).map(s => (
 								<li key={s.id} className="series-item">
-									<ChevronRight size={14} />
+									<ChevronRight size={14} className="accent-color" />
 									<span title={s.name}>{s.name}</span>
 								</li>
 							))}
@@ -209,8 +267,12 @@ function App() {
 				<section className="chart-area glass-panel">
 					{!selectedDate ? (
 						<div className="empty-state">
-							<FileText size={48} />
-							<p>请导入 CSV 或 JSON 数据并选择日期以开始分析</p>
+							<Upload size={64} className="accent-color floating" />
+							<h2>开始分析</h2>
+							<p>支持拖拽文件、点击导入或粘贴文本数据</p>
+							<div className="support-tips">
+								<span>CSV</span> • <span>JSON</span> • <span>TXT</span>
+							</div>
 						</div>
 					) : (
 						<div ref={chartRef} className="chart-container"></div>
@@ -218,8 +280,32 @@ function App() {
 				</section>
 			</main>
 
+			{isPasteModalOpen && (
+				<div className="modal-overlay">
+					<div className="modal-content glass-panel">
+						<div className="modal-header">
+							<h3>粘贴数据导入</h3>
+							<button className="close-btn" onClick={() => setIsPasteModalOpen(false)}>
+								<X size={20} />
+							</button>
+						</div>
+						<p className="modal-subtitle">支持 CSV (带表头) 或 JSON 数组格式</p>
+						<textarea
+							className="paste-area"
+							placeholder="在此处粘贴您的数据..."
+							value={pasteContent}
+							onChange={(e) => setPasteContent(e.target.value)}
+						/>
+						<div className="modal-actions">
+							<button className="cancel-btn" onClick={() => setIsPasteModalOpen(false)}>取消</button>
+							<button className="premium-button" onClick={handlePasteSubmit}>确认导入</button>
+						</div>
+					</div>
+				</div>
+			)}
+
 			<footer className="footer">
-				<p>© 2026 DataCurve Analyzer by yjiefl</p>
+				<p>© 2026 DataCurve Analyzer • 强大的曲线对比分析工具</p>
 			</footer>
 		</div>
 	);

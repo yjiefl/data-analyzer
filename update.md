@@ -9,7 +9,13 @@
     - 采用 Glassmorphism 磨砂玻璃 UI 设计。 (修改人: Antigravity)
     - 完成核心逻辑的单元测试 (Vitest) 并通过验证。 (修改人: Antigravity)
     - 创建 `start.sh` 快速启动脚本。 (修改人: Antigravity)
+    - **新增功能及修复**:
+        - 增加数据文本拷贝导入功能 (Paste Import)。 (修改人: Antigravity)
+        - 增加文件拖拽导入功能 (Drag & Drop)。 (修改人: Antigravity)
+        - 修复 CSV 导入兼容性问题，现支持中文表头及分开的日期/时间列。 (修改人: Antigravity)
 
 # 待修改
 
 # 规划中
+
+- 可以部署到qnap的docker中
