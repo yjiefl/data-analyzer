@@ -8,7 +8,7 @@
     - 引入 PapaParse 支持 CSV/JSON 数据解析与自动日期分组。 (修改人: Antigravity)
     - 采用 Glassmorphism 磨砂玻璃 UI 设计。 (修改人: Antigravity)
     - 完成核心逻辑的单元测试 (Vitest) 并通过验证。 (修改人: Antigravity)
-    - 创建 `start.sh` 快速启动脚本。 (修改人: Antigravity)
+    - 创建 `start.sh` 快速启动脚本，并增加自动打开浏览器功能（仅在无错误启动时触发）。 (修改人: Antigravity)
     - **新增功能及修复**:
         - 增加数据文本拷贝导入功能 (Paste Import)。 (修改人: Antigravity)
         - 增加文件拖拽导入功能 (Drag & Drop)。 (修改人: Antigravity)
