@@ -2,7 +2,8 @@ import React, { useState, useEffect, useRef } from 'react';
 import * as echarts from 'echarts';
 import Papa from 'papaparse';
 import { Upload, FileText, ChevronRight, BarChart3, Trash2 } from 'lucide-react';
-import { format, parseISO, isValid } from 'date-fns';
+import { format } from 'date-fns';
+import { processDataLogic } from './utils/dataProcessor';
 import './App.css';
 
 /**
@@ -132,43 +133,21 @@ function App() {
 	 * @param {string} fileName 
 	 */
 	const processData = (rawData, fileName) => {
-		// 假设数据格式包含 'time' 和 'value' 列/键
-		const formattedData = rawData
-			.map(item => {
-				const time = new Date(item.time || item.Timestamp || item.date);
-				const value = parseFloat(item.value || item.Value || item.val);
-				return { time, value };
-			})
-			.filter(item => !isNaN(item.time.getTime()) && !isNaN(item.value));
-
-		if (formattedData.length === 0) return;
-
-		// 按日期分组
-		const grouped = {};
-		formattedData.forEach(d => {
-			const dateStr = format(d.time, 'yyyy-MM-dd');
-			if (!grouped[dateStr]) grouped[dateStr] = [];
-			grouped[dateStr].push(d);
-		});
-
-		const newSeries = Object.keys(grouped).map(date => ({
-			name: `${fileName} (${date})`,
-			data: grouped[date],
-			date: date,
-			id: Math.random().toString(36).substr(2, 9)
-		}));
+		const newSeries = processDataLogic(rawData, fileName);
+		if (newSeries.length === 0) return;
 
 		setSeries(prev => [...prev, ...newSeries]);
 
 		// 更新可用日期
 		setAvailableDates(prev => {
-			const combined = [...new Set([...prev, ...Object.keys(grouped)])];
+			const currentDates = newSeries.map(s => s.date);
+			const combined = [...new Set([...prev, ...currentDates])];
 			return combined.sort();
 		});
 
 		// 如果当前没选日期，默认选第一个
-		if (!selectedDate && Object.keys(grouped).length > 0) {
-			setSelectedDate(Object.keys(grouped)[0]);
+		if (!selectedDate && newSeries.length > 0) {
+			setSelectedDate(newSeries[0].date);
 		}
 	};
 
