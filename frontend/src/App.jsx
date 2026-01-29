@@ -169,8 +169,18 @@ function App() {
 	 * 处理文件上传
 	 */
 	const handleFileUpload = (e) => {
-		const file = e.target.files ? e.target.files[0] : e;
-		if (!file) return;
+		let file;
+		// 区分 input 选择 (事件对象) 和 拖拽 (File对象)
+		if (e && e.target && e.target.files) {
+			file = e.target.files[0];
+		} else {
+			file = e;
+		}
+
+		if (!file || !(file instanceof File || file instanceof Blob)) {
+			console.error('无效的文件对象:', file);
+			return;
+		}
 
 		const reader = new FileReader();
 		reader.onload = (event) => {
