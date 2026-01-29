@@ -45,7 +45,7 @@ function App() {
 		}
 	}, []);
 
-	// 2. 数据驱动：更新图表内容
+	// 2. 数据驱动：更新图表内容 (多轴支持)
 	useEffect(() => {
 		// 防御性检查：确保实例存在且未被销毁
 		if (!chartInstance.current || chartInstance.current.isDisposed()) {
@@ -64,22 +64,64 @@ function App() {
 			return;
 		}
 
+		// --- 动态多轴逻辑 ---
+		// 1. 识别所有独特的指标类型（用于创建共享轴）
+		// 优先使用 metricName (如果存在), 否则使用 name
+		const uniqueMetrics = [...new Set(activeSeries.map(s => s.metricName || s.name))];
+
+		// 2. 生成 Y 轴配置
+		const yAxisConfig = uniqueMetrics.map((metric, index) => {
+			const isLeft = index === 0;
+			// 如果超过2个轴，右侧轴向右偏移
+			const offset = index > 1 ? (index - 1) * 60 : 0;
+
+			return {
+				type: 'value',
+				name: metric, // 轴名称显示指标名
+				nameTextStyle: {
+					color: '#ccc',
+					padding: [0, 0, 0, 10]
+				},
+				position: isLeft ? 'left' : 'right',
+				offset: offset,
+				scale: true, // 自动缩放
+				axisLine: {
+					show: true,
+					lineStyle: { color: getUserColor(index) } // 轴线颜色与数据对齐
+				},
+				axisLabel: { color: '#ccc' },
+				splitLine: {
+					show: isLeft, // 只显示第一条轴的网格线，避免混乱
+					lineStyle: { color: 'rgba(255, 255, 255, 0.05)' }
+				}
+			};
+		});
+
+		// 计算右侧需要的边距 (每个额外的右侧轴约需 60px)
+		// 0个指标 -> 4%
+		// 1个指标 -> 4%
+		// 2个指标 -> 5%
+		// 3个指标 -> 5 + 4 = 9%
+		const rightPercent = uniqueMetrics.length > 2 ? `${5 + (uniqueMetrics.length - 2) * 5}%` : '5%';
+
 		const option = {
 			backgroundColor: 'transparent',
 			tooltip: {
 				trigger: 'axis',
 				backgroundColor: 'rgba(13, 13, 18, 0.9)',
 				borderColor: 'rgba(255, 255, 255, 0.2)',
-				textStyle: { color: '#fff' }
+				textStyle: { color: '#fff' },
+				axisPointer: { type: 'cross' } // 十字准星，更适合多轴
 			},
 			legend: {
 				data: activeSeries.map(s => s.name),
 				textStyle: { color: '#ccc' },
-				top: 10
+				top: 10,
+				type: 'scroll' // 如果系列太多，允许滚动
 			},
 			grid: {
-				left: '3%',
-				right: '4%',
+				left: '5%',
+				right: rightPercent, // 动态调整右边以容纳多轴
 				bottom: '10%',
 				containLabel: true
 			},
@@ -88,20 +130,23 @@ function App() {
 				axisLine: { lineStyle: { color: 'rgba(255, 255, 255, 0.2)' } },
 				splitLine: { show: false }
 			},
-			yAxis: {
-				type: 'value',
-				scale: true, // 自动缩放坐标轴，使曲线更清晰
-				axisLine: { lineStyle: { color: 'rgba(255, 255, 255, 0.2)' } },
-				splitLine: { lineStyle: { color: 'rgba(255, 255, 255, 0.05)' } }
-			},
-			series: activeSeries.map(s => ({
-				name: s.name,
-				type: 'line',
-				smooth: true,
-				showSymbol: false,
-				data: s.data.map(d => [d.time, d.value]),
-				lineStyle: { width: 3 }
-			}))
+			yAxis: yAxisConfig,
+			series: activeSeries.map((s, idx) => {
+				// 找到该序列对应的轴索引
+				const metricKey = s.metricName || s.name;
+				const axisIndex = uniqueMetrics.indexOf(metricKey);
+
+				return {
+					name: s.name,
+					type: 'line',
+					yAxisIndex: axisIndex, // 绑定到对应轴
+					smooth: true,
+					showSymbol: false,
+					data: s.data.map(d => [d.time, d.value]),
+					lineStyle: { width: 3 },
+					itemStyle: { color: getUserColor(axisIndex) } // 让同一类指标颜色接近，或者区分不同指标
+				};
+			})
 		};
 
 		chartInstance.current.setOption(option, true);
@@ -348,6 +393,15 @@ function App() {
 			</footer>
 		</div>
 	);
+}
+
+// 辅助函数：生成不同颜色
+function getUserColor(index) {
+	const colors = [
+		'#5470c6', '#91cc75', '#fac858', '#ee6666', '#73c0de',
+		'#3ba272', '#fc8452', '#9a60b4', '#ea7ccc'
+	];
+	return colors[index % colors.length];
 }
 
 export default App;
