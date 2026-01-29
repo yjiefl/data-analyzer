@@ -115,10 +115,15 @@ export const processDataLogic = (rawData, fileName) => {
 
 			if (seriesData.length > 0) {
 				// 获取简单的文件名（去除扩展名）
-				const simpleFileName = fileName.replace(/\.[^/.]+$/, "");
+				let simpleFileName = fileName.replace(/\.[^/.]+$/, "");
+
+				// 优化：如果是粘贴的数据，不显示冗余的“粘贴数据_HHmm”
+				if (simpleFileName.startsWith('粘贴数据_')) {
+					simpleFileName = '手动导入';
+				}
 
 				resultSeries.push({
-					name: `${metric} (${simpleFileName})`, // 例如：相对湿度(%) (data_file)
+					name: `${metric} (${simpleFileName})`, // 例如：相对湿度(%) (手动导入)
 					data: seriesData,
 					date: date,
 					metricName: metric, // 用于后续分组或轴匹配

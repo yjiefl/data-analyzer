@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import * as echarts from 'echarts';
 import Papa from 'papaparse';
-import { Upload, FileText, ChevronRight, BarChart3, Trash2, ClipboardPaste, X } from 'lucide-react';
+import { Upload, FileText, ChevronRight, BarChart3, Trash2, ClipboardPaste, X, Download, RotateCcw } from 'lucide-react';
 import { format } from 'date-fns';
 import { processDataLogic } from './utils/dataProcessor';
 import './App.css';
@@ -124,7 +124,11 @@ function App() {
 				data: activeSeries.map(s => s.name),
 				textStyle: { color: '#ccc' },
 				top: 10,
-				type: 'scroll' // 如果系列太多，允许滚动
+				type: 'plain',
+				formatter: (name) => {
+					// 仅显示指标名，隐藏括号内的文件名部分
+					return name.split(' (')[0];
+				}
 			},
 			grid: {
 				left: '5%',
@@ -164,6 +168,17 @@ function App() {
 		chartInstance.current.setOption(option, true);
 		setTimeout(() => chartInstance.current?.resize(), 100);
 	}, [series, selectedDate, axisRanges]);
+
+	// 3. 自动同步可用日期列表
+	useEffect(() => {
+		const dates = [...new Set(series.map(s => s.date))].sort();
+		setAvailableDates(dates);
+
+		// 如果当前选中的日期已不存在，则自动切换
+		if (selectedDate && !dates.includes(selectedDate)) {
+			setSelectedDate(dates.length > 0 ? dates[0] : '');
+		}
+	}, [series]);
 
 	/**
 	 * 处理文件上传
@@ -291,15 +306,55 @@ function App() {
 
 		setSeries(prev => [...prev, ...newSeries]);
 
-		setAvailableDates(prev => {
-			const currentDates = newSeries.map(s => s.date);
-			const combined = [...new Set([...prev, ...currentDates])];
-			return combined.sort();
-		});
-
 		if (!selectedDate && newSeries.length > 0) {
 			setSelectedDate(newSeries[0].date);
 		}
+	};
+
+	/**
+	 * 删除单个系列
+	 */
+	const removeSeries = (id) => {
+		setSeries(prev => prev.filter(s => s.id !== id));
+	};
+
+	/**
+	 * 导出当前图表数据为 CSV
+	 */
+	const exportData = () => {
+		const activeSeries = series.filter(s => s.date === selectedDate);
+		if (activeSeries.length === 0) return;
+
+		// 收集所有的时间戳并排序
+		const allTimestamps = new Set();
+		activeSeries.forEach(s => s.data.forEach(d => allTimestamps.add(d.time.getTime())));
+		const sortedTimestamps = [...allTimestamps].sort((a, b) => a - b);
+
+		// 构建 CSV 表头
+		const headers = ['时间', ...activeSeries.map(s => s.name)];
+		const rows = [headers];
+
+		// 构建数据行
+		sortedTimestamps.forEach(ts => {
+			const timeStr = format(new Date(ts), 'yyyy-MM-dd HH:mm:ss');
+			const row = [timeStr];
+			activeSeries.forEach(s => {
+				const point = s.data.find(d => d.time.getTime() === ts);
+				row.push(point ? point.value : '');
+			});
+			rows.push(row);
+		});
+
+		// 转换为 CSV 字符串
+		const csvContent = rows.map(r => r.join(',')).join('\n');
+		const blob = new Blob(['\ufeff' + csvContent], { type: 'text/csv;charset=utf-8;' });
+		const url = URL.createObjectURL(blob);
+		const link = document.createElement('a');
+		link.href = url;
+		link.setAttribute('download', `exported_data_${selectedDate}.csv`);
+		document.body.appendChild(link);
+		link.click();
+		document.body.removeChild(link);
 	};
 
 	const clearAll = () => {
@@ -340,6 +395,12 @@ function App() {
 						导入文件
 						<input type="file" accept=".csv,.json" onChange={handleFileUpload} hidden />
 					</label>
+					{selectedDate && (
+						<button className="nav-btn export-btn" onClick={exportData} title="导出当前视图数据">
+							<Download size={18} />
+							导出
+						</button>
+					)}
 					<button className="clear-btn" onClick={clearAll} title="清空所有数据">
 						<Trash2 size={18} />
 					</button>
@@ -368,8 +429,17 @@ function App() {
 						<ul>
 							{series.filter(s => s.date === selectedDate).map(s => (
 								<li key={s.id} className="series-item">
-									<ChevronRight size={14} className="accent-color" />
-									<span title={s.name}>{s.name}</span>
+									<div className="series-info">
+										<ChevronRight size={14} className="accent-color" />
+										<span title={s.name}>{s.name}</span>
+									</div>
+									<button
+										className="delete-series-btn"
+										onClick={() => removeSeries(s.id)}
+										title="删除此曲线"
+									>
+										<X size={14} />
+									</button>
 								</li>
 							))}
 						</ul>
@@ -379,21 +449,36 @@ function App() {
 						<div className="axis-controls">
 							<p className="label">坐标轴设置</p>
 							{[...new Set(series.filter(s => s.date === selectedDate).map(s => s.metricName || s.name))].map(metric => (
-								<div key={metric} className="axis-input-group glass-panel">
-									<span className="axis-name">{metric}</span>
+								<div key={metric} className="axis-input-group-compact glass-panel">
+									<div className="axis-header">
+										<span className="axis-name" title={metric}>{metric}</span>
+										<button
+											className="reset-axis-btn"
+											onClick={() => setAxisRanges(prev => {
+												const next = { ...prev };
+												delete next[metric];
+												return next;
+											})}
+											title="恢复默认范围"
+										>
+											<RotateCcw size={12} />
+											默认
+										</button>
+									</div>
 									<div className="input-row">
 										<input
 											type="number"
-											placeholder="最小值"
+											placeholder="Min"
 											value={axisRanges[metric]?.min || ''}
 											onChange={(e) => setAxisRanges(prev => ({
 												...prev,
 												[metric]: { ...prev[metric], min: e.target.value }
 											}))}
 										/>
+										<span className="separator">-</span>
 										<input
 											type="number"
-											placeholder="最大值"
+											placeholder="Max"
 											value={axisRanges[metric]?.max || ''}
 											onChange={(e) => setAxisRanges(prev => ({
 												...prev,
