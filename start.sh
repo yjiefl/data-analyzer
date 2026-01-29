@@ -9,12 +9,17 @@ echo "🚀 正在启动 DataCurve Analyzer..."
 # 获取脚本所在目录的绝对路径
 SCRIPT_DIR=$(cd "$(dirname "$0")"; pwd)
 FRONTEND_DIR="$SCRIPT_DIR/frontend"
-NODE_BIN="/opt/homebrew/bin/node"
-NPM_BIN="/opt/homebrew/bin/npm"
-
 # 1. 环境检查
-if [ ! -f "$NODE_BIN" ]; then
-    echo "❌ 错误: 未在 /opt/homebrew/bin/ 找到 Node.js"
+NODE_BIN=$(which node)
+NPM_BIN=$(which npm)
+
+if [ -z "$NODE_BIN" ]; then
+    echo "❌ 错误: 未在系统中找到 Node.js，请先安装 Node.js"
+    exit 1
+fi
+
+if [ -z "$NPM_BIN" ]; then
+    echo "❌ 错误: 未在系统中找到 npm，请先安装 Node.js"
     exit 1
 fi
 
