@@ -23,6 +23,9 @@ function App() {
 
 	// 轴范围设置：{ metricName: { min: '', max: '' } }
 	const [axisRanges, setAxisRanges] = useState({});
+	const [showIntegral, setShowIntegral] = useState(false);
+	const [hoveredMetric, setHoveredMetric] = useState(null);
+	const [backendStatus, setBackendStatus] = useState('offline'); // online | offline | checking
 
 	// 1. 生命周期管理：初始化与销毁
 	useEffect(() => {
@@ -35,10 +38,26 @@ function App() {
 
 			chartInstance.current = echarts.init(chartRef.current, 'dark');
 
+			// 鼠标移动监听：用于切换左侧纵坐标
+			chartInstance.current.on('mouseover', (params) => {
+				if (params.seriesName) {
+					// 提取指标名（过滤掉括号内容）
+					const metric = params.seriesName.split(' (')[0];
+					setHoveredMetric(metric);
+				}
+			});
+
+			chartInstance.current.on('mouseout', () => {
+				setHoveredMetric(null);
+			});
+
 			const handleResize = () => {
 				chartInstance.current?.resize();
 			};
 			window.addEventListener('resize', handleResize);
+
+			// 模拟检测后端状态
+			checkBackend();
 
 			return () => {
 				window.removeEventListener('resize', handleResize);
@@ -47,6 +66,20 @@ function App() {
 			};
 		}
 	}, []);
+
+	/**
+	 * 模拟检测后端
+	 */
+	const checkBackend = async () => {
+		try {
+			setBackendStatus('checking');
+			// 尝试访问可能存在的 API（此处为模拟）
+			const res = await fetch('/api/health').catch(() => ({ ok: false }));
+			setBackendStatus(res.ok ? 'online' : 'offline');
+		} catch (e) {
+			setBackendStatus('offline');
+		}
+	};
 
 	// 2. 数据驱动：更新图表内容 (多轴支持)
 	useEffect(() => {
@@ -74,42 +107,40 @@ function App() {
 
 		// 2. 生成 Y 轴配置
 		const yAxisConfig = uniqueMetrics.map((metric, index) => {
-			const isLeft = index === 0;
-			// 如果超过2个轴，右侧轴向右偏移
-			const offset = index > 1 ? (index - 1) * 60 : 0;
-
 			const customRange = axisRanges[metric] || {};
+
+			// 逻辑：如果没有任何悬停，显示第一个轴；如果有悬停，仅显示匹配的轴
+			const isActive = hoveredMetric ? (metric === hoveredMetric) : (index === 0);
 
 			return {
 				type: 'value',
-				name: metric, // 轴名称显示指标名
+				name: metric,
 				nameTextStyle: {
-					color: '#ccc',
+					color: isActive ? getUserColor(index) : 'transparent',
 					padding: [0, 0, 0, 10]
 				},
-				position: isLeft ? 'left' : 'right',
-				offset: offset,
-				scale: true, // 自动缩放
+				position: 'left', // 始终在左侧
+				show: isActive, // 非激活状态不显示，避免重叠
+				scale: true,
 				min: customRange.min !== '' && customRange.min !== undefined ? parseFloat(customRange.min) : null,
 				max: customRange.max !== '' && customRange.max !== undefined ? parseFloat(customRange.max) : null,
 				axisLine: {
 					show: true,
-					lineStyle: { color: getUserColor(index) } // 轴线颜色与数据对齐
+					lineStyle: { color: getUserColor(index) }
 				},
-				axisLabel: { color: '#ccc' },
+				axisLabel: {
+					show: true,
+					color: '#ccc'
+				},
 				splitLine: {
-					show: isLeft, // 只显示第一条轴的网格线，避免混乱
+					show: isActive,
 					lineStyle: { color: 'rgba(255, 255, 255, 0.05)' }
 				}
 			};
 		});
 
-		// 计算右侧需要的边距 (每个额外的右侧轴约需 60px)
-		// 0个指标 -> 4%
-		// 1个指标 -> 4%
-		// 2个指标 -> 5%
-		// 3个指标 -> 5 + 4 = 9%
-		const rightPercent = uniqueMetrics.length > 2 ? `${5 + (uniqueMetrics.length - 2) * 5}%` : '5%';
+		// 计算右侧边距（现在不需要为多轴预留空间了）
+		const rightPercent = '5%';
 
 		const option = {
 			backgroundColor: 'transparent',
@@ -167,7 +198,7 @@ function App() {
 
 		chartInstance.current.setOption(option, true);
 		setTimeout(() => chartInstance.current?.resize(), 100);
-	}, [series, selectedDate, axisRanges]);
+	}, [series, selectedDate, axisRanges, hoveredMetric]);
 
 	// 3. 自动同步可用日期列表
 	useEffect(() => {
@@ -312,6 +343,26 @@ function App() {
 	};
 
 	/**
+	 * 计算曲线积分 (梯形法则)
+	 * @param {Array} data - [{time, value}]
+	 * @returns {string} 积分值 (单位: 数值*小时)
+	 */
+	const calculateIntegral = (data) => {
+		if (!data || data.length < 2) return '0.00';
+		let total = 0;
+		// 按时间对齐排序
+		const sorted = [...data].sort((a, b) => a.time.getTime() - b.time.getTime());
+
+		for (let i = 0; i < sorted.length - 1; i++) {
+			const p1 = sorted[i];
+			const p2 = sorted[i + 1];
+			const dt = (p2.time.getTime() - p1.time.getTime()) / (1000 * 3600); // 间隔小时数
+			total += (p1.value + p2.value) * dt / 2;
+		}
+		return total.toFixed(2);
+	};
+
+	/**
 	 * 删除单个系列
 	 */
 	const removeSeries = (id) => {
@@ -384,6 +435,10 @@ function App() {
 				<div className="logo">
 					<BarChart3 className="logo-icon" />
 					<span>DataCurve <strong>Analyzer</strong></span>
+					<div className={`backend-status-badge ${backendStatus}`}>
+						<span className="status-dot"></span>
+						{backendStatus === 'online' ? '后端: 在线' : (backendStatus === 'checking' ? '正在连接...' : '后端: 离线 (本地模式)')}
+					</div>
 				</div>
 				<div className="nav-actions">
 					<button className="nav-btn premium-button" onClick={() => setIsPasteModalOpen(true)}>
@@ -424,6 +479,17 @@ function App() {
 						</select>
 					</div>
 
+					<div className="analysis-options">
+						<label className="checkbox-label">
+							<input
+								type="checkbox"
+								checked={showIntegral}
+								onChange={(e) => setShowIntegral(e.target.checked)}
+							/>
+							<span>显示积分值 (AUC)</span>
+						</label>
+					</div>
+
 					<div className="series-list">
 						<p className="label">已选系列 ({series.filter(s => s.date === selectedDate).length})</p>
 						<ul>
@@ -431,7 +497,12 @@ function App() {
 								<li key={s.id} className="series-item">
 									<div className="series-info">
 										<ChevronRight size={14} className="accent-color" />
-										<span title={s.name}>{s.name}</span>
+										<div className="series-name-group">
+											<span title={s.name}>{s.name}</span>
+											{showIntegral && (
+												<span className="series-auc">积分项: {calculateIntegral(s.data)}</span>
+											)}
+										</div>
 									</div>
 									<button
 										className="delete-series-btn"

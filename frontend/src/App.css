@@ -463,6 +463,85 @@
 	background: rgba(168, 85, 247, 0.1);
 }
 
+.backend-status-badge {
+	display: flex;
+	align-items: center;
+	gap: 6px;
+	padding: 4px 10px;
+	background: rgba(255, 255, 255, 0.05);
+	border-radius: 100px;
+	font-size: 0.7rem;
+	margin-left: 10px;
+	border: 1px solid rgba(255, 255, 255, 0.1);
+}
+
+.backend-status-badge.online {
+	color: #10b981;
+}
+
+.backend-status-badge.online .status-dot {
+	background: #10b981;
+	box-shadow: 0 0 8px #10b981;
+}
+
+.backend-status-badge.offline {
+	color: #ef4444;
+}
+
+.backend-status-badge.offline .status-dot {
+	background: #ef4444;
+}
+
+.backend-status-badge.checking {
+	color: #f59e0b;
+}
+
+.backend-status-badge.checking .status-dot {
+	background: #f59e0b;
+	animation: pulse 1s infinite;
+}
+
+.status-dot {
+	width: 6px;
+	height: 6px;
+	border-radius: 50%;
+}
+
+.analysis-options {
+	padding: 0 10px;
+}
+
+.checkbox-label {
+	display: flex;
+	align-items: center;
+	gap: 8px;
+	font-size: 0.8rem;
+	color: #aaa;
+	cursor: pointer;
+}
+
+.checkbox-label input {
+	width: 14px;
+	height: 14px;
+}
+
+.series-name-group {
+	display: flex;
+	flex-direction: column;
+	gap: 2px;
+	overflow: hidden;
+}
+
+.series-auc {
+	font-size: 0.7rem;
+	color: #a855f7;
+	font-weight: 500;
+}
+
+.series-item:hover .series-auc {
+	color: #fff;
+}
+
 .input-row input::placeholder {
 	color: #444;
 }
