@@ -28,7 +28,7 @@ if [ $? -eq 0 ]; then
     echo "🛠  正在远程触发 Docker 重建与启动..."
     
     # 通过 SSH 远程执行 docker-compose 命令
-    ssh $SSH_ALIAS "cd $VPS_PATH && docker compose up -d --build"
+    ssh $SSH_ALIAS "cd $VPS_PATH && docker-compose up -d --build"
     
     if [ $? -eq 0 ]; then
         echo "🚀 部署完成！系统访问地址: http://$VPS_IP:5003"
