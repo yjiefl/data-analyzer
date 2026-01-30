@@ -53,7 +53,9 @@ function App() {
 	const [selectedDimensionValues, setSelectedDimensionValues] = useState(() => getInitialState('selectedDimensionValues', []));
 	const [legendSelected, setLegendSelected] = useState({});
 	const [chartTypes, setChartTypes] = useState(() => getInitialState('chartTypes', {}));
-	const [historyRecords, setHistoryRecords] = useState(() => getInitialState('historyRecords', []));
+	const [historyRecords, setHistoryRecords] = useState([]); // 从后端动态加载
+	const [historySearchTerm, setHistorySearchTerm] = useState(''); // 新增：存单搜索
+	const [customMetricColors, setCustomMetricColors] = useState(() => getInitialState('customMetricColors', {}));
 
 	// 新增 UI 状态
 	const [theme, setTheme] = useState(() => getInitialState('theme', 'dark'));
@@ -113,6 +115,7 @@ function App() {
 			resizeObserver.observe(chartRef.current);
 
 			checkBackend();
+			loadSnapshotsFromBackend();
 
 			return () => {
 				resizeObserver.disconnect();
@@ -121,6 +124,21 @@ function App() {
 			};
 		}
 	}, [theme]); // 主题切换时重新初始化
+
+	/**
+	 * 从后端加载历史存单
+	 */
+	const loadSnapshotsFromBackend = async () => {
+		try {
+			const res = await fetch('/api/snapshots');
+			if (res.ok) {
+				const data = await res.json();
+				setHistoryRecords(data);
+			}
+		} catch (e) {
+			console.error('加载历史存单失败:', e);
+		}
+	};
 
 	/**
 	 * 模拟检测后端
@@ -150,11 +168,16 @@ function App() {
 			return;
 		}
 
-		// 如果选中了多个日期，要在指标名中体现日期
-		const showDateInName = selectedDates.length > 1;
-
 		const uniqueMetrics = [...new Set(activeSeries.map(s => s.metricName || s.name))];
 		const isLight = theme === 'light';
+
+		// 获取所有图例项：如果用户要求共用图例，我们只列出基础指标名
+		// 如果不共用，则列出 带日期的名称
+		const legendItems = [...new Set(activeSeries.map(s => {
+			const nameWithoutDate = s.name.split(' (')[0];
+			// 默认同一个数据（Metric）共用图例开关
+			return nameWithoutDate;
+		}))];
 
 		const yAxisConfig = uniqueMetrics.map((metric, index) => {
 			const customRange = axisRanges[metric] || {};
@@ -178,6 +201,7 @@ function App() {
 					const dataMax = Math.max(...vals);
 					const dataMin = Math.min(...vals);
 					// 严格遵循：精度为最大值的5% (取绝对值的最大作为基准)
+					// 处理负数：确保 padding 始终基于量程感观
 					const baseValue = Math.max(Math.abs(dataMax), Math.abs(dataMin));
 					const padding = baseValue * 0.05 || 1;
 					if (finalMin === null) finalMin = dataMin - padding;
@@ -245,11 +269,8 @@ function App() {
 				}
 			},
 			legend: {
-				data: activeSeries.map((s, idx) => {
-					const nameWithoutDate = s.name.split(' (')[0];
-					return showDateInName ? `${s.date} ${nameWithoutDate}` : nameWithoutDate;
-				}),
-				selected: legendSelected, // 关键：应用保存的图例状态
+				data: legendItems,
+				selected: legendSelected,
 				textStyle: { color: isLight ? '#333' : '#ccc', fontSize: 11 },
 				top: 5,
 				type: 'scroll',
@@ -277,12 +298,11 @@ function App() {
 				const metricKey = s.metricName || nameWithoutDate;
 				const axisIndex = uniqueMetrics.indexOf(metricKey);
 
-				// 改进颜色分配：同一指标不同日期分配不同偏色（如果支持）
 				// 或者简单点，让相同指标保持同色但虚实区分，或者完全异色
 				const seriesIndex = activeSeries.findIndex(as => as.id === s.id);
-				const color = getUserColor(showDateInName ? seriesIndex : axisIndex);
+				const color = customMetricColors[metricKey] || getUserColor(axisIndex); // 优先使用自定义颜色
 
-				const displayName = showDateInName ? `${s.date} ${nameWithoutDate}` : nameWithoutDate;
+				const displayName = nameWithoutDate; // 设置为基础名，使其共用图例
 				const type = chartTypes[metricKey] || 'line';
 
 				// 如果同一项有多个系列，使用虚线区分
@@ -316,7 +336,7 @@ function App() {
 						type: isDashed ? 'dashed' : 'solid' // 如果有重复图例，用虚线区别
 					},
 					itemStyle: {
-						color: getUserColor(axisIndex),
+						color: customMetricColors[metricKey] || getUserColor(axisIndex),
 						borderWidth: 1.5
 					},
 					emphasis: {
@@ -521,7 +541,7 @@ function App() {
 
 	const toggleTheme = () => setTheme(prev => prev === 'dark' ? 'light' : 'dark');
 
-	const saveSnapshot = () => {
+	const saveSnapshot = async () => {
 		const name = prompt("请输入历史记录名称:", `记录_${format(new Date(), 'MM-dd HH:mm')}`);
 		if (!name) return;
 
@@ -529,7 +549,7 @@ function App() {
 		const capturedSeries = series.filter(s => selectedDates.includes(s.date));
 
 		const record = {
-			id: Date.now(),
+			id: Date.now().toString(),
 			name,
 			selectedDates,
 			activeDimension,
@@ -538,7 +558,20 @@ function App() {
 			chartTypes,
 			capturedSeries // 保存数据副本
 		};
-		setHistoryRecords(prev => [record, ...prev]);
+
+		try {
+			const res = await fetch('/api/snapshots', {
+				method: 'POST',
+				headers: { 'Content-Type': 'application/json' },
+				body: JSON.stringify(record)
+			});
+			if (res.ok) {
+				setHistoryRecords(prev => [record, ...prev]);
+			}
+		} catch (e) {
+			console.error('保存失败:', e);
+			// 降级使用 LocalStorage (暂不实现，避免数据不一致)
+		}
 	};
 
 	const loadSnapshot = (rec) => {
@@ -565,9 +598,27 @@ function App() {
 		}, 0);
 	};
 
-	const deleteSnapshot = (id) => {
+	const deleteSnapshot = async (id) => {
 		if (!confirm("确定要删除这条历史存单吗？")) return;
-		setHistoryRecords(prev => prev.filter(r => r.id !== id));
+		try {
+			const res = await fetch(`/api/snapshots/${id}`, { method: 'DELETE' });
+			if (res.ok) {
+				setHistoryRecords(prev => prev.filter(r => r.id !== id));
+			}
+		} catch (e) {
+			console.error('删除失败:', e);
+		}
+	};
+
+	const setAllLegends = (status) => {
+		if (!chartInstance.current) return;
+		const option = chartInstance.current.getOption();
+		const legend = option.legend[0];
+		const updatedSelected = {};
+		legend.data.forEach(name => {
+			updatedSelected[name] = status;
+		});
+		setLegendSelected(updatedSelected);
 	};
 
 	const toggleDate = (date) => {
@@ -639,6 +690,16 @@ function App() {
 
 					<div className="sidebar-header" style={{ marginTop: '8px' }}>
 						<h3>{activeTab === 'controls' ? '分析控制台' : '历史快照库'}</h3>
+						{activeTab === 'history' && (
+							<div className="search-compact">
+								<input
+									type="text"
+									placeholder="搜索存单..."
+									value={historySearchTerm}
+									onChange={(e) => setHistorySearchTerm(e.target.value)}
+								/>
+							</div>
+						)}
 						<button className="width-toggle-btn" onClick={() => setIsSidebarWide(!isSidebarWide)} title={isSidebarWide ? "切换窄版" : "切换宽版"}>
 							<Layout size={14} /> {isSidebarWide ? "窄版" : "宽版"}
 						</button>
@@ -700,6 +761,10 @@ function App() {
 											<Archive size={14} /> 存入历史
 										</button>
 									</div>
+									<div className="legend-bulk-actions">
+										<button onClick={() => setAllLegends(true)}>图例全选</button>
+										<button onClick={() => setAllLegends(false)}>全不选</button>
+									</div>
 									<label className="checkbox-label">
 										<input type="checkbox" checked={isFocusMode} onChange={(e) => setIsFocusMode(e.target.checked)} />
 										<span>启用悬停聚焦 (变暗背景)</span>
@@ -735,21 +800,27 @@ function App() {
 						<div className="sidebar-scroll-area">
 							<div className="history-section-full">
 								<div className="history-list-large">
-									{historyRecords.length === 0 ? (
-										<div className="empty-mini">暂无历史存单</div>
+									{historyRecords
+										.filter(rec => rec.name.toLowerCase().includes(historySearchTerm.toLowerCase()) ||
+											rec.selectedDates.some(d => d.includes(historySearchTerm)))
+										.length === 0 ? (
+										<div className="empty-mini">未找到匹配存单</div>
 									) : (
-										historyRecords.map(rec => (
-											<div key={rec.id} className="history-item-large glass-panel">
-												<div className="history-content-row" onClick={() => loadSnapshot(rec)}>
-													<PlayCircle size={18} className="accent-color" />
-													<div className="history-text">
-														<span className="h-name">{rec.name}</span>
-														<span className="h-date">{rec.selectedDates.join(', ')}</span>
+										historyRecords
+											.filter(rec => rec.name.toLowerCase().includes(historySearchTerm.toLowerCase()) ||
+												rec.selectedDates.some(d => d.includes(historySearchTerm)))
+											.map(rec => (
+												<div key={rec.id} className="history-item-compact glass-panel">
+													<div className="history-content-row" onClick={() => loadSnapshot(rec)}>
+														<div className="h-avatar">{rec.name.charAt(0)}</div>
+														<div className="history-text">
+															<span className="h-name">{rec.name}</span>
+															<span className="h-date">{rec.selectedDates.join(', ')}</span>
+														</div>
 													</div>
+													<button className="delete-history-btn" onClick={() => deleteSnapshot(rec.id)}><X size={14} /></button>
 												</div>
-												<button className="delete-history-btn" onClick={() => deleteSnapshot(rec.id)}><X size={16} /></button>
-											</div>
-										))
+											))
 									)}
 								</div>
 							</div>
@@ -765,7 +836,7 @@ function App() {
 									const uniqueMetricsInView = [...new Set(currentActiveSeries.map(s => s.metricName || s.name))];
 
 									return uniqueMetricsInView.map((metric, index) => {
-										const metricColor = getUserColor(index);
+										const metricColor = customMetricColors[metric] || getUserColor(index);
 										const metricColorAlpha = metricColor + '22';
 										const vals = currentActiveSeries.filter(s => (s.metricName === metric || s.name === metric)).flatMap(s => s.data.map(d => d.value));
 										const dMin = vals.length ? Math.min(...vals).toFixed(1) : '-';
@@ -821,6 +892,13 @@ function App() {
 													/>
 												</div>
 												<div className="axis-actions">
+													<input
+														type="color"
+														value={metricColor}
+														onChange={(e) => setCustomMetricColors(prev => ({ ...prev, [metric]: e.target.value }))}
+														className="color-picker-mini"
+														title="调整指标颜色"
+													/>
 													<button
 														className={`type-toggle-btn ${chartTypes[metric] === 'bar' ? 'active' : ''}`}
 														onClick={() => setChartTypes(prev => ({ ...prev, [metric]: prev[metric] === 'bar' ? 'line' : 'bar' }))}
@@ -845,7 +923,7 @@ function App() {
 							<h2>开始分析</h2>
 							<p>支持拖拽文件或粘贴数据</p>
 							<div className="guide-box">
-								<div className="guide-step"><span>1</span> 导入 CSV/JSON 数据</div>
+								<div className="guide-step"><span>1</span> 导入 CSV/JSON <a href="/sample_data.csv" download className="sample-link">下载范例文件</a></div>
 								<div className="guide-step"><span>2</span> 在左侧勾选想要对比的日期</div>
 								<div className="guide-step"><span>3</span> 点击图表上的圆点切换纵坐标</div>
 								<div className="guide-step"><span>4</span> 点击设置中的图标切换线/柱图</div>
