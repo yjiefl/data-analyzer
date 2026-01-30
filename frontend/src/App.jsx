@@ -15,7 +15,20 @@ function App() {
 	const getInitialState = (key, defaultVal) => {
 		try {
 			const saved = localStorage.getItem(`da_${key}`);
-			return saved ? JSON.parse(saved) : defaultVal;
+			if (!saved) return defaultVal;
+			const parsed = JSON.parse(saved);
+
+			// 如果是 series，需要将字符串日期恢复为 Date 对象
+			if (key === 'series' && Array.isArray(parsed)) {
+				return parsed.map(s => ({
+					...s,
+					data: s.data.map(d => ({
+						...d,
+						time: new Date(d.time)
+					}))
+				}));
+			}
+			return parsed;
 		} catch (e) { return defaultVal; }
 	};
 
@@ -281,8 +294,9 @@ function App() {
 				let plotData = s.data.map(d => [d.time, d.value]);
 				if (isCompareOverlap) {
 					plotData = s.data.map(d => {
+						const dTime = new Date(d.time); // 确保是 Date 对象，防止黑屏崩溃
 						const baseDate = new Date(2000, 0, 1);
-						baseDate.setHours(d.time.getHours(), d.time.getMinutes(), d.time.getSeconds());
+						baseDate.setHours(dTime.getHours(), dTime.getMinutes(), dTime.getSeconds());
 						return [baseDate, d.value];
 					});
 				}
@@ -532,8 +546,12 @@ function App() {
 		if (rec.capturedSeries && rec.capturedSeries.length > 0) {
 			setSeries(prev => {
 				const existingIds = new Set(prev.map(s => s.id));
-				const newSeries = rec.capturedSeries.filter(s => !existingIds.has(s.id));
-				return [...prev, ...newSeries];
+				const revitalizedNew = rec.capturedSeries.map(s => ({
+					...s,
+					data: s.data.map(d => ({ ...d, time: new Date(d.time) }))
+				}));
+				const filteredNew = revitalizedNew.filter(s => !existingIds.has(s.id));
+				return [...prev, ...filteredNew];
 			});
 		}
 
@@ -548,6 +566,7 @@ function App() {
 	};
 
 	const deleteSnapshot = (id) => {
+		if (!confirm("确定要删除这条历史存单吗？")) return;
 		setHistoryRecords(prev => prev.filter(r => r.id !== id));
 	};
 
@@ -771,6 +790,15 @@ function App() {
 														step={finalStep}
 														value={axisRanges[metric]?.min || ''}
 														onChange={(e) => setAxisRanges(prev => ({ ...prev, [metric]: { ...prev[metric], min: e.target.value } }))}
+														onKeyDown={(e) => {
+															if (!axisRanges[metric]?.min && (e.key === 'ArrowUp' || e.key === 'ArrowDown')) {
+																e.preventDefault();
+																const startVal = parseFloat(dMin) || 0;
+																const step = parseFloat(finalStep);
+																const newVal = e.key === 'ArrowUp' ? startVal + step : startVal - step;
+																setAxisRanges(prev => ({ ...prev, [metric]: { ...prev[metric], min: newVal.toFixed(2) } }));
+															}
+														}}
 														style={{ borderBottomColor: metricColor, borderBottomStyle: 'solid' }}
 													/>
 													<span>-</span>
@@ -780,6 +808,15 @@ function App() {
 														step={finalStep}
 														value={axisRanges[metric]?.max || ''}
 														onChange={(e) => setAxisRanges(prev => ({ ...prev, [metric]: { ...prev[metric], max: e.target.value } }))}
+														onKeyDown={(e) => {
+															if (!axisRanges[metric]?.max && (e.key === 'ArrowUp' || e.key === 'ArrowDown')) {
+																e.preventDefault();
+																const startVal = parseFloat(dMax) || 0;
+																const step = parseFloat(finalStep);
+																const newVal = e.key === 'ArrowUp' ? startVal + step : startVal - step;
+																setAxisRanges(prev => ({ ...prev, [metric]: { ...prev[metric], max: newVal.toFixed(2) } }));
+															}
+														}}
 														style={{ borderBottomColor: metricColor, borderBottomStyle: 'solid' }}
 													/>
 												</div>
