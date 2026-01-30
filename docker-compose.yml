@@ -1,0 +1,14 @@
+services:
+  datacurve-analyzer:
+    build: .
+    container_name: datacurve-analyzer
+    ports:
+      - "5003:3001" # 映射外部 5003 到容器内部 Node 端口
+    restart: always
+    environment:
+      - NODE_ENV=production
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"

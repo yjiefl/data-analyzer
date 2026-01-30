@@ -30,14 +30,26 @@ fi
 
 # 2. 依赖检查与安装
 cd "$FRONTEND_DIR"
-echo "📦 正在检查依赖..."
+echo "📦 正在检查前端依赖..."
 if ! "$NPM_BIN" install --quiet; then
-    echo "❌ 错误: 依赖安装失败，请检查网络或 package.json"
+    echo "❌ 错误: 前端依赖安装失败，请检查网络或 package.json"
     exit 1
 fi
 
-# 3. 启动开发服务器并尝试自动打开浏览器
-echo "🌐 正在启动开发服务器..."
+# 3. 启动后端服务器
+BACKEND_DIR="$SCRIPT_DIR/backend"
+if [ -d "$BACKEND_DIR" ]; then
+    echo "⚙️ 正在启动后端服务..."
+    mkdir -p "$SCRIPT_DIR/log" # 确保日志目录存在
+    cd "$BACKEND_DIR"
+    "$NPM_BIN" install --quiet
+    node server.js > "$SCRIPT_DIR/log/backend.log" 2>&1 &
+    echo "✅ 后端服务已在后台启动 (Port: 3001)"
+fi
+
+# 4. 启动前端 Vite 开发服务器并尝试自动打开浏览器
+cd "$FRONTEND_DIR" # 切换回前端目录以启动 Vite
+echo "🌐 正在启动前端开发服务器..."
 echo "💡 如果服务器启动成功且无错误，将为您自动打开分析页面。"
 echo "------------------------------------------------"
 
