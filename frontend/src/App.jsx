@@ -159,13 +159,14 @@ function App() {
 			let finalMax = customRange.max !== '' && customRange.max !== undefined ? parseFloat(customRange.max) : null;
 
 			if (finalMin === null || finalMax === null) {
-				const metricSeries = activeSeries.filter(s => s.metricName === metric || s.name.startsWith(metric));
+				const metricSeries = activeSeries.filter(s => (s.metricName || s.name.split(' (')[0]) === metric);
 				const vals = metricSeries.flatMap(s => s.data.map(d => d.value));
 				if (vals.length) {
 					const dataMax = Math.max(...vals);
 					const dataMin = Math.min(...vals);
-					// 严格遵循：上下的精度为最大值的5%
-					const padding = Math.abs(dataMax) * 0.05 || 1;
+					// 严格遵循：精度为最大值的5% (取绝对值的最大作为基准)
+					const baseValue = Math.max(Math.abs(dataMax), Math.abs(dataMin));
+					const padding = baseValue * 0.05 || 1;
 					if (finalMin === null) finalMin = dataMin - padding;
 					if (finalMax === null) finalMax = dataMax + padding;
 				}
@@ -186,12 +187,12 @@ function App() {
 				max: finalMax,
 				axisLine: {
 					show: isActive,
-					lineStyle: { color: getUserColor(index) }
+					lineStyle: { color: getUserColor(index), width: 2 }
 				},
 				axisTick: { show: isActive },
 				axisLabel: {
 					show: true,
-					color: isLight ? '#666' : '#ccc',
+					color: isLight ? '#1d1d1f' : '#ccc',
 					margin: 12,
 					width: 75, // 稍微再加宽一点，确保长数字不跳动
 					overflow: 'truncate',
@@ -252,7 +253,7 @@ function App() {
 				type: 'time',
 				axisLine: { lineStyle: { color: isLight ? 'rgba(0,0,0,0.1)' : 'rgba(255, 255, 255, 0.2)' } },
 				axisLabel: {
-					color: isLight ? '#666' : '#ccc',
+					color: isLight ? '#1d1d1f' : '#ccc',
 					formatter: isCompareOverlap ? '{HH}:{mm}' : null
 				},
 				splitLine: { show: false }
@@ -494,11 +495,14 @@ function App() {
 	};
 
 	const clearAll = () => {
+		if (!confirm("确定要清空所有当前加载的数据吗？(历史存单将被保留)")) return;
 		setSeries([]);
 		setAvailableDates([]);
 		setSelectedDates([]);
-		setHistoryRecords([]);
-		localStorage.clear();
+		// setHistoryRecords([]); // 用户要求：不要删除历史存单
+		// localStorage.clear(); // 不要暴力清空所有，只修改我们需要重置的项
+		localStorage.removeItem('da_series');
+		localStorage.removeItem('da_selectedDates');
 	};
 
 	const toggleTheme = () => setTheme(prev => prev === 'dark' ? 'light' : 'dark');
@@ -737,31 +741,57 @@ function App() {
 						<div className="axis-section">
 							<p className="label fixed-header">坐标轴与单位设置</p>
 							<div className="axis-list-scrollable">
-								{[...new Set(series.filter(s => selectedDates.includes(s.date)).map(s => s.metricName || s.name))].map(metric => {
-									const vals = series.filter(s => selectedDates.includes(s.date) && (s.metricName === metric || s.name === metric)).flatMap(s => s.data.map(d => d.value));
-									const dMin = vals.length ? Math.min(...vals).toFixed(1) : '-';
-									const dMax = vals.length ? Math.max(...vals).toFixed(1) : '-';
-									return (
-										<div key={metric} className="axis-row-compact glass-panel">
-											<span className="axis-label-text" title={metric}>{metric}</span>
-											<div className="axis-inputs">
-												<input type="number" placeholder={dMin} value={axisRanges[metric]?.min || ''} onChange={(e) => setAxisRanges(prev => ({ ...prev, [metric]: { ...prev[metric], min: e.target.value } }))} />
-												<span>-</span>
-												<input type="number" placeholder={dMax} value={axisRanges[metric]?.max || ''} onChange={(e) => setAxisRanges(prev => ({ ...prev, [metric]: { ...prev[metric], max: e.target.value } }))} />
+								{(() => {
+									const currentActiveSeries = series.filter(s => selectedDates.includes(s.date));
+									const uniqueMetricsInView = [...new Set(currentActiveSeries.map(s => s.metricName || s.name))];
+
+									return uniqueMetricsInView.map((metric, index) => {
+										const metricColor = getUserColor(index);
+										const metricColorAlpha = metricColor + '22';
+										const vals = currentActiveSeries.filter(s => (s.metricName === metric || s.name === metric)).flatMap(s => s.data.map(d => d.value));
+										const dMin = vals.length ? Math.min(...vals).toFixed(1) : '-';
+										const dMax = vals.length ? Math.max(...vals).toFixed(1) : '-';
+										return (
+											<div
+												key={metric}
+												className="axis-row-compact glass-panel"
+												style={{
+													borderLeftColor: metricColor,
+													'--metric-color-alpha': metricColorAlpha
+												}}
+											>
+												<span className="axis-label-text" title={metric} style={{ color: theme === 'light' ? '#1d1d1f' : 'inherit', fontWeight: 600 }}>{metric}</span>
+												<div className="axis-inputs">
+													<input
+														type="number"
+														placeholder={dMin}
+														value={axisRanges[metric]?.min || ''}
+														onChange={(e) => setAxisRanges(prev => ({ ...prev, [metric]: { ...prev[metric], min: e.target.value } }))}
+														style={{ borderBottomColor: metricColor, borderBottomStyle: 'solid' }}
+													/>
+													<span>-</span>
+													<input
+														type="number"
+														placeholder={dMax}
+														value={axisRanges[metric]?.max || ''}
+														onChange={(e) => setAxisRanges(prev => ({ ...prev, [metric]: { ...prev[metric], max: e.target.value } }))}
+														style={{ borderBottomColor: metricColor, borderBottomStyle: 'solid' }}
+													/>
+												</div>
+												<div className="axis-actions">
+													<button
+														className={`type-toggle-btn ${chartTypes[metric] === 'bar' ? 'active' : ''}`}
+														onClick={() => setChartTypes(prev => ({ ...prev, [metric]: prev[metric] === 'bar' ? 'line' : 'bar' }))}
+														title="切换折线/柱状图"
+													>
+														{chartTypes[metric] === 'bar' ? <BarChart3 size={14} /> : <FileText size={14} />}
+													</button>
+													<button onClick={() => setAxisRanges(prev => { const n = { ...prev }; delete n[metric]; return n; })} title="恢复默认范围"><RotateCcw size={14} /></button>
+												</div>
 											</div>
-											<div className="axis-actions">
-												<button
-													className={`type-toggle-btn ${chartTypes[metric] === 'bar' ? 'active' : ''}`}
-													onClick={() => setChartTypes(prev => ({ ...prev, [metric]: prev[metric] === 'bar' ? 'line' : 'bar' }))}
-													title="切换折线/柱状图"
-												>
-													{chartTypes[metric] === 'bar' ? <BarChart3 size={14} /> : <FileText size={14} />}
-												</button>
-												<button onClick={() => setAxisRanges(prev => { const n = { ...prev }; delete n[metric]; return n; })} title="恢复默认范围"><RotateCcw size={14} /></button>
-											</div>
-										</div>
-									);
-								})}
+										);
+									});
+								})()}
 							</div>
 						</div>
 					)}

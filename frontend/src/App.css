@@ -9,16 +9,18 @@
 }
 
 .light-theme {
-	--bg-dark: #fbfbfd;
-	/* 苹果标准极其浅灰背景 */
+	--bg-dark: #f5f5f7;
+	/* 苹果标准浅灰背景 */
 	--panel-bg: #ffffff;
 	--accent-color: #0071e3;
 	--accent-glow: rgba(0, 113, 227, 0.2);
 	--text-main: #1d1d1f;
 	/* 强行回归标准深色 */
-	--text-mute: #6e6e73;
+	--text-mute: #86868b;
 	--border-color: #d2d2d7;
 	--hover-bg: rgba(0, 0, 0, 0.05);
+	--region-bg: #f5f5f7;
+	/* 用于区域区分的浅灰 */
 }
 
 * {
@@ -244,6 +246,11 @@ body {
 	pointer-events: none;
 }
 
+.light-theme .sidebar {
+	background-color: #f5f5f7;
+	border-right: 1px solid #d2d2d7;
+}
+
 .sidebar-header {
 	margin-bottom: 8px;
 	/* 减小间距 */
@@ -383,8 +390,8 @@ body {
 }
 
 .light-theme .series-item {
-	background: #fff;
-	border-color: #e5e5e7;
+	background: #fbfbfd;
+	border-color: #d2d2d7;
 }
 
 .series-info {
@@ -470,10 +477,36 @@ body {
 	display: flex;
 	align-items: center;
 	gap: 8px;
-	padding: 6px 8px;
-	/* 减小内边距 */
-	margin-bottom: 4px;
-	/* 减小间距 */
+	padding: 8px 12px;
+	margin-bottom: 6px;
+	transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+	border-left: 6px solid transparent;
+	/* 明显的侧边颜色条 */
+	position: relative;
+	overflow: hidden;
+}
+
+.light-theme .axis-row-compact {
+	background-color: #ffffff;
+	border-color: #d2d2d7;
+	box-shadow: 0 1px 3px rgba(0, 0, 0, 0.05);
+}
+
+/* 增加颜色反馈的强度 */
+.axis-row-compact::after {
+	content: '';
+	position: absolute;
+	left: 0;
+	top: 0;
+	bottom: 0;
+	width: 100%;
+	background: linear-gradient(90deg, var(--metric-color-alpha) 0%, transparent 40px);
+	pointer-events: none;
+	opacity: 0.15;
+}
+
+.light-theme .axis-row-compact::after {
+	opacity: 0.08;
 }
 
 .axis-label-text {
@@ -491,14 +524,23 @@ body {
 }
 
 .axis-inputs input {
-	width: 50px;
+	width: 55px;
 	background: rgba(0, 0, 0, 0.2);
 	border: 1px solid var(--border-color);
-	border-radius: 4px;
+	border-bottom-width: 2px;
+	/* 底部加粗用于显示颜色 */
+	border-radius: 6px;
 	color: var(--text-main);
-	padding: 2px 4px;
+	padding: 4px 6px;
 	font-size: 0.75rem;
 	text-align: center;
+	transition: border-color 0.2s, box-shadow 0.2s;
+}
+
+.light-theme .axis-inputs input {
+	background: #f5f5f7;
+	border-color: #d2d2d7;
+	color: #1d1d1f;
 }
 
 .axis-actions {
@@ -601,6 +643,10 @@ body {
 	border-right: none !important;
 	min-width: 0;
 	/* 允许图表区域缩小 */
+}
+
+.light-theme .chart-area {
+	background-color: #ffffff;
 }
 
 .empty-state {
