@@ -20,9 +20,23 @@ npm install
 npm run dev
 ```
 
+## 部署说明
+
+### 1. 本地 NAS 部署 (QNAP)
+确保本地网络通畅并在项目根执行：
+```bash
+./deploy_to_nas.sh
+```
+
+### 2. VPS 部署 (Docker)
+确保 VPS ($IP: 107.174.62.30) 运行环境已安装 Docker 及其 Compose 插件：
+```bash
+./deploy_to_vps.sh
+```
+
 ## 目录结构
 - `/frontend`: 前端 React 应用代码
-- `/docs`: 相关设计文档
+- `/backend`: 后端 API 服务
 - `/log`: 调试日志
 
 ## 贡献者
