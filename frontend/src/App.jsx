@@ -751,6 +751,9 @@ function App() {
 										const vals = currentActiveSeries.filter(s => (s.metricName === metric || s.name === metric)).flatMap(s => s.data.map(d => d.value));
 										const dMin = vals.length ? Math.min(...vals).toFixed(1) : '-';
 										const dMax = vals.length ? Math.max(...vals).toFixed(1) : '-';
+										const stepVal = (Math.max(Math.abs(parseFloat(dMin)), Math.abs(parseFloat(dMax))) * 0.05).toFixed(2);
+										const finalStep = stepVal > 0 ? stepVal : 0.1;
+
 										return (
 											<div
 												key={metric}
@@ -765,6 +768,7 @@ function App() {
 													<input
 														type="number"
 														placeholder={dMin}
+														step={finalStep}
 														value={axisRanges[metric]?.min || ''}
 														onChange={(e) => setAxisRanges(prev => ({ ...prev, [metric]: { ...prev[metric], min: e.target.value } }))}
 														style={{ borderBottomColor: metricColor, borderBottomStyle: 'solid' }}
@@ -773,6 +777,7 @@ function App() {
 													<input
 														type="number"
 														placeholder={dMax}
+														step={finalStep}
 														value={axisRanges[metric]?.max || ''}
 														onChange={(e) => setAxisRanges(prev => ({ ...prev, [metric]: { ...prev[metric], max: e.target.value } }))}
 														style={{ borderBottomColor: metricColor, borderBottomStyle: 'solid' }}

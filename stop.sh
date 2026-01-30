@@ -3,18 +3,12 @@
 echo "🛑 正在停止 DataCurve Analyzer..."
 
 # 1. 停止 Vite
-VITE_PID=$(lsof -t -i:5173)
-if [ -n "$VITE_PID" ]; then
-    echo " killing Vite (PID: $VITE_PID)"
-    kill -9 $VITE_PID
-fi
+echo " stopping Vite on ports 5173, 5174..."
+lsof -t -i:5173 -i:5174 | xargs kill -9 2>/dev/null || true
 
 # 2. 停止 Backend
-BACKEND_PID=$(lsof -t -i:3001)
-if [ -n "$BACKEND_PID" ]; then
-    echo " killing Backend (PID: $BACKEND_PID)"
-    kill -9 $BACKEND_PID
-fi
+echo " stopping Backend on port 3001..."
+lsof -t -i:3001 | xargs kill -9 2>/dev/null || true
 
 # 3. 如果是 Docker 部署
 if command -v docker-compose &> /dev/null; then
