@@ -39,12 +39,15 @@ fi
 # 3. 启动后端服务器
 BACKEND_DIR="$SCRIPT_DIR/backend"
 if [ -d "$BACKEND_DIR" ]; then
-    echo "⚙️ 正在启动后端服务..."
+    echo "⚙️ 正在检查并重启后端服务..."
+    # 杀掉可能已在运行的旧后端进程
+    lsof -ti :3001 | xargs kill -9 2>/dev/null
+    
     mkdir -p "$SCRIPT_DIR/log" # 确保日志目录存在
     cd "$BACKEND_DIR"
     "$NPM_BIN" install --quiet
     node server.js > "$SCRIPT_DIR/log/backend.log" 2>&1 &
-    echo "✅ 后端服务已在后台启动 (Port: 3001)"
+    echo "✅ 后端服务已重新启动 (Port: 3001)"
 fi
 
 # 4. 启动前端 Vite 开发服务器并尝试自动打开浏览器

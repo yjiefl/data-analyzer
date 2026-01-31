@@ -54,10 +54,14 @@ const extractTimeAndSeries = (item) => {
 		const val = item[key];
 		const numVal = parseFloat(val);
 
+		// 定义空值/无效值的占位符
+		const naWords = ['-','--','nan','null','none','n/a','undefined'];
+		const isNA = val === undefined || val === null || (typeof val === 'string' && naWords.includes(val.toLowerCase().trim()));
+
 		if (!isNaN(numVal) && !isNaN(val)) {
 			// 指标
 			values[key] = numVal;
-		} else if (val !== undefined && val !== null && val !== '') {
+		} else if (!isNA && val !== '') {
 			// 维度 (字符串)
 			dimensions[key] = val.toString();
 		}
@@ -79,13 +83,15 @@ const guessUnit = (name) => {
 		'降水': 'mm',
 		'电压': 'V',
 		'电流': 'A',
-		'功率': 'W',
+		'功率': 'MW',
+		'出清曲线': 'MW',
+		'短期预测': 'MW',
 		'压力': 'Pa',
 		'转速': 'rpm'
 	};
 
 	// 1. 尝试从括号中提取
-	const match = name.match(/[\(\（]([^\)\）]+)[\)\）]/);
+	const match = name.match(/[(（]([^)）]+)[)）]/);
 	if (match) return match[1];
 
 	// 2. 模糊匹配关键字
