@@ -6,6 +6,7 @@
 
 # --- 配置区 ---
 SSH_ALIAS="racknerd" # 使用用户 ~/.ssh/config 中配置的别名
+VPS_IP="107.174.62.30"
 VPS_PATH="/root/apps/data-analyzer" # VPS 上的部署路径
 # --- --- --- ---
 

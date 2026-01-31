@@ -85,6 +85,16 @@ app.delete('/api/snapshots/:id', (req, res) => {
 	});
 });
 
+// 删除所有存单
+app.delete('/api/snapshots', (req, res) => {
+	db.run("DELETE FROM snapshots", [], function (err) {
+		if (err) {
+			return res.status(500).json({ error: err.message });
+		}
+		res.json({ success: true, deleted: this.changes });
+	});
+});
+
 // 获取访问日志
 app.get('/api/logs', (req, res) => {
 	if (fs.existsSync(LOG_FILE)) {

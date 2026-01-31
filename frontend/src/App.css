@@ -292,6 +292,25 @@ body {
 	color: var(--accent-color);
 }
 
+.delete-all-btn {
+	background: rgba(239, 68, 68, 0.1);
+	border: 1px solid rgba(239, 68, 68, 0.2);
+	color: #ef4444;
+	padding: 4px 8px;
+	border-radius: 6px;
+	font-size: 0.75rem;
+	cursor: pointer;
+	display: flex;
+	align-items: center;
+	gap: 4px;
+	transition: all 0.2s;
+}
+
+.delete-all-btn:hover {
+	background: #ef4444;
+	color: white;
+}
+
 .sidebar-scroll-area {
 	flex: 1;
 	overflow-y: auto;

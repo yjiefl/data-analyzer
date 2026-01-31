@@ -200,12 +200,14 @@ function App() {
 				if (vals.length) {
 					const dataMax = Math.max(...vals);
 					const dataMin = Math.min(...vals);
-					// 严格遵循：精度为最大值的5% (取绝对值的最大作为基准)
-					// 处理负数：确保 padding 始终基于量程感观
-					const baseValue = Math.max(Math.abs(dataMax), Math.abs(dataMin));
-					const padding = baseValue * 0.05 || 1;
-					if (finalMin === null) finalMin = dataMin - padding;
-					if (finalMax === null) finalMax = dataMax + padding;
+					
+					// 改进：负数自适应逻辑
+					if (finalMin === null) {
+						finalMin = dataMin < 0 ? dataMin * 1.1 : dataMin - (Math.abs(dataMax - dataMin) * 0.05 || 1);
+					}
+					if (finalMax === null) {
+						finalMax = dataMax > 0 ? dataMax * 1.1 : dataMax + (Math.abs(dataMax - dataMin) * 0.05 || 1);
+					}
 				}
 			}
 
@@ -497,25 +499,64 @@ function App() {
 
 	const exportData = () => {
 		const activeSeries = series.filter(s => {
-			if (!selectedDates.includes(s.date)) return false;
-			if (!activeDimension || selectedDimensionValues.length === 0) return true;
-			return selectedDimensionValues.includes(s.dimensions[activeDimension]);
+			const dateMatch = selectedDates.includes(s.date);
+			const dimMatch = activeDimension ? selectedDimensionValues.includes(s.dimensions[activeDimension]) : true;
+			return dateMatch && dimMatch;
 		});
+
 		if (activeSeries.length === 0) return;
-		const allTimestamps = new Set();
-		activeSeries.forEach(s => s.data.forEach(d => allTimestamps.add(d.time.getTime())));
-		const sortedTimestamps = [...allTimestamps].sort((a, b) => a - b);
-		const headers = ['时间', ...activeSeries.map(s => s.name)];
-		const rows = [headers];
-		sortedTimestamps.forEach(ts => {
-			const timeStr = format(new Date(ts), 'yyyy-MM-dd HH:mm:ss');
-			const row = [timeStr];
-			activeSeries.forEach(s => {
-				const point = s.data.find(d => d.time.getTime() === ts);
-				row.push(point ? point.value : '');
+
+		// 1. 自动收集所有维度和指标
+		const dimensionKeys = new Set();
+		const metricNames = new Set();
+		activeSeries.forEach(s => {
+			Object.keys(s.dimensions).forEach(k => dimensionKeys.add(k));
+			metricNames.add(s.metricName);
+		});
+
+		const dimKeyList = Array.from(dimensionKeys).sort();
+		const metricNameList = Array.from(metricNames).sort();
+
+		// 2. 按时间、日期和维度组合数据
+		const dataRows = {}; // key: date|time|dimValues
+
+		activeSeries.forEach(s => {
+			s.data.forEach(d => {
+				const dateStr = s.date;
+				const timeStr = format(d.time, 'HH:mm:ss');
+				const dimValuesJoined = dimKeyList.map(k => s.dimensions[k] || '').join('|');
+				const rowKey = `${dateStr}|${timeStr}|${dimValuesJoined}`;
+
+				if (!dataRows[rowKey]) {
+					dataRows[rowKey] = {
+						date: dateStr,
+						time: timeStr,
+						dims: { ...s.dimensions },
+						metrics: {}
+					};
+				}
+				dataRows[rowKey].metrics[s.metricName] = d.value;
 			});
+		});
+
+		// 3. 构建 CSV 内容
+		const headers = ['日期', '时间', ...dimKeyList, ...metricNameList];
+		const rows = [headers];
+
+		// 按日期和时间排序
+		const sortedRowKeys = Object.keys(dataRows).sort();
+
+		sortedRowKeys.forEach(key => {
+			const rowData = dataRows[key];
+			const row = [
+				rowData.date,
+				rowData.time,
+				...dimKeyList.map(k => rowData.dims[k] || ''),
+				...metricNameList.map(m => rowData.metrics[m] !== undefined ? rowData.metrics[m] : '')
+			];
 			rows.push(row);
 		});
+
 		const csvContent = rows.map(r => r.join(',')).join('\n');
 		const blob = new Blob(['\ufeff' + csvContent], { type: 'text/csv;charset=utf-8;' });
 		const url = URL.createObjectURL(blob);
@@ -607,6 +648,18 @@ function App() {
 			}
 		} catch (e) {
 			console.error('删除失败:', e);
+		}
+	};
+
+	const clearAllHistory = async () => {
+		if (!confirm("确定要清空所有历史存单吗？此操作不可撤销！")) return;
+		try {
+			const res = await fetch('/api/snapshots', { method: 'DELETE' });
+			if (res.ok) {
+				setHistoryRecords([]);
+			}
+		} catch (e) {
+			console.error('清空历史失败:', e);
 		}
 	};
 
@@ -703,6 +756,11 @@ function App() {
 						<button className="width-toggle-btn" onClick={() => setIsSidebarWide(!isSidebarWide)} title={isSidebarWide ? "切换窄版" : "切换宽版"}>
 							<Layout size={14} /> {isSidebarWide ? "窄版" : "宽版"}
 						</button>
+						{activeTab === 'history' && historyRecords.length > 0 && (
+							<button className="delete-all-btn" onClick={clearAllHistory} title="清空所有记录">
+								<Trash2 size={14} /> 清空
+							</button>
+						)}
 					</div>
 
 					{activeTab === 'controls' ? (
@@ -862,9 +920,10 @@ function App() {
 														value={axisRanges[metric]?.min || ''}
 														onChange={(e) => setAxisRanges(prev => ({ ...prev, [metric]: { ...prev[metric], min: e.target.value } }))}
 														onKeyDown={(e) => {
-															if (!axisRanges[metric]?.min && (e.key === 'ArrowUp' || e.key === 'ArrowDown')) {
+															if (e.key === 'ArrowUp' || e.key === 'ArrowDown') {
 																e.preventDefault();
-																const startVal = parseFloat(dMin) || 0;
+																const currentVal = parseFloat(axisRanges[metric]?.min);
+																const startVal = isNaN(currentVal) ? parseFloat(dMin) : currentVal;
 																const step = parseFloat(finalStep);
 																const newVal = e.key === 'ArrowUp' ? startVal + step : startVal - step;
 																setAxisRanges(prev => ({ ...prev, [metric]: { ...prev[metric], min: newVal.toFixed(2) } }));
@@ -880,9 +939,10 @@ function App() {
 														value={axisRanges[metric]?.max || ''}
 														onChange={(e) => setAxisRanges(prev => ({ ...prev, [metric]: { ...prev[metric], max: e.target.value } }))}
 														onKeyDown={(e) => {
-															if (!axisRanges[metric]?.max && (e.key === 'ArrowUp' || e.key === 'ArrowDown')) {
+															if (e.key === 'ArrowUp' || e.key === 'ArrowDown') {
 																e.preventDefault();
-																const startVal = parseFloat(dMax) || 0;
+																const currentVal = parseFloat(axisRanges[metric]?.max);
+																const startVal = isNaN(currentVal) ? parseFloat(dMax) : currentVal;
 																const step = parseFloat(finalStep);
 																const newVal = e.key === 'ArrowUp' ? startVal + step : startVal - step;
 																setAxisRanges(prev => ({ ...prev, [metric]: { ...prev[metric], max: newVal.toFixed(2) } }));
@@ -923,7 +983,7 @@ function App() {
 							<h2>开始分析</h2>
 							<p>支持拖拽文件或粘贴数据</p>
 							<div className="guide-box">
-								<div className="guide-step"><span>1</span> 导入 CSV/JSON <a href="/sample_data.csv" download className="sample-link">下载范例文件</a></div>
+								<div className="guide-step"><span>1</span> 导入 CSV/JSON <a href="/sample_weather.csv" download className="sample-link">下载范例文件</a></div>
 								<div className="guide-step"><span>2</span> 在左侧勾选想要对比的日期</div>
 								<div className="guide-step"><span>3</span> 点击图表上的圆点切换纵坐标</div>
 								<div className="guide-step"><span>4</span> 点击设置中的图标切换线/柱图</div>
